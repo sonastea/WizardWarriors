@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.23.3-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 ARG DATABASE_URL
 ARG REDIS_URL
@@ -10,8 +10,8 @@ ENV REDIS_URL=$REDIS_URL
 RUN mkdir /opt/ww
 WORKDIR /opt/ww
 
-RUN apk add --no-cache git=2.45.2-r0 build-base=0.5-r3 && \
-  go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN apk add --no-cache git=2.49.1-r0 build-base=0.5-r3 && \
+  go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 COPY go.mod .
 COPY go.sum .
@@ -23,14 +23,14 @@ WORKDIR /opt/ww/cmd/ww-srv
 
 RUN go build -o ww-srv
 
-FROM alpine:3.20.3
+FROM alpine:3.22
 
 ARG DATABASE_URL
 ARG REDIS_URL
 ENV DATABASE_URL=$DATABASE_URL
 ENV REDIS_URL=$REDIS_URL
 
-RUN mkdir /opt/ww && apk add --no-cache curl=8.11.1-r0
+RUN mkdir /opt/ww && apk add --no-cache curl=8.14.1-r2
 WORKDIR /opt/ww
 
 COPY --from=builder /go/bin/goose /usr/local/bin/goose
