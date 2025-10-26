@@ -1,7 +1,13 @@
 {
   "compilerOptions": {
     "target": "es5",
-    "lib": ["es6", "dom", "dom.iterable", "esnext", "scripthost"],
+    "lib": [
+      "es6",
+      "dom",
+      "dom.iterable",
+      "esnext",
+      "scripthost"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -16,12 +22,26 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@hooks/*": ["src/hooks/*"],
-      "@contexts/*": ["src/contexts/*"]
+      "@hooks/*": [
+        "src/hooks/*"
+      ],
+      "@contexts/*": [
+        "src/contexts/*"
+      ]
     },
-    "types": ["phaser"],
-    "typeRoots": ["./node_modules/phaser/types"]
+    "types": [
+      "phaser"
+    ],
+    "typeRoots": [
+      "./node_modules/phaser/types"
+    ]
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

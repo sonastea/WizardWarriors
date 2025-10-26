@@ -81,9 +81,11 @@ func registerHandler(us userService) http.HandlerFunc {
 			Name:     "ww-userId",
 			Value:    fmt.Sprintf("%d", userId),
 			Path:     "/",
-			Domain:   getDomain(),
+			Domain:   getDomain(r),
 			Secure:   isProduction(),
+			HttpOnly: false,
 			SameSite: getSameSite(),
+			MaxAge:   86400 * 7,
 		})
 
 		response := APIResponse{
@@ -134,9 +136,11 @@ func loginHandler(us userService) http.HandlerFunc {
 			Name:     "ww-userId",
 			Value:    fmt.Sprintf("%d", userId),
 			Path:     "/",
-			Domain:   getDomain(),
+			Domain:   getDomain(r),
 			Secure:   isProduction(),
+			HttpOnly: false,
 			SameSite: getSameSite(),
+			MaxAge:   86400 * 7,
 		})
 
 		saves, err := us.PlayerSaves(ctx)
