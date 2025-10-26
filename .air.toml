@@ -3,8 +3,8 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = []
-  bin = "./tmp/main --DATABASE_URL=$DATABASE_URL --REDIS_URL=$REDIS_URL"
+  args_bin = ["--DATABASE_URL=$DATABASE_URL", "--REDIS_URL=$REDIS_URL"]
+  bin = "./tmp/main"
   cmd = "go build -o ./tmp/main ./cmd/ww-srv"
   delay = 100
   exclude_dir = ["assets", "tmp", "vendor", "testdata", "Game", "migrations", "docker", "ww-ui"]
