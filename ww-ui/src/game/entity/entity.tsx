@@ -5,6 +5,7 @@ import HealthBar from "./healthbar";
 import Player from "./player";
 import Projectile from "./projectile";
 import { EventBus } from "../EventBus";
+import Ally from "./ally";
 
 export default class Entity extends Phaser.Physics.Arcade.Sprite {
   declare scene: GameScene;
@@ -103,7 +104,10 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
     });
   };
 
-  takeDamage = (damage: number, attacker?: Player | Entity | Projectile) => {
+  takeDamage = (
+    damage: number,
+    attacker?: Player | Ally | Entity | Projectile
+  ) => {
     if (!attacker) return;
     if (this.damageCooldowns.has(attacker?.id)) {
       return;

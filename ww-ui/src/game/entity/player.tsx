@@ -1,7 +1,6 @@
 import { ANIMS, ENTITY } from "../constants";
 import { Game as GameScene } from "../scenes/Game";
 import Ally from "./ally";
-import Enemy from "./enemy";
 import Entity from "./entity";
 import Fireball from "./fireball";
 import Projectile from "./projectile";
@@ -45,11 +44,6 @@ export default class Player extends Entity {
 
   incPlayerKills = () => {};
 
-  attackTarget = (target: Ally | Enemy) => {
-    if (!target) return;
-    target.takeDamage(this.attack, this);
-  };
-
   castFireball = (destX: number, destY: number) => {
     const angle = Phaser.Math.Angle.Between(this.x, this.y, destX, destY);
     const fireball = new Fireball(
@@ -69,7 +63,10 @@ export default class Player extends Entity {
     );
   };
 
-  takeDamage = (damage: number, attacker?: Player | Entity | Projectile) => {
+  takeDamage = (
+    damage: number,
+    attacker?: Player | Ally | Entity | Projectile
+  ) => {
     if (!attacker) return;
     if (this.damageCooldowns.has(attacker.id)) {
       return;

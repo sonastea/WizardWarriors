@@ -17,8 +17,17 @@ import Fireball from "../entity/fireball";
 
 export class Game extends Scene {
   player: Player | null;
-  allies: Ally[] = [];
-  enemies: Enemy[] = [];
+
+  allies!: Phaser.Physics.Arcade.Group;
+  enemies!: Phaser.Physics.Arcade.Group;
+
+  get getAllies(): Ally[] {
+    return this.allies.getChildren() as Ally[];
+  }
+
+  get getEnemies(): Enemy[] {
+    return this.enemies.getChildren() as Enemy[];
+  }
 
   collisionLayer: Phaser.Tilemaps.TilemapLayer | null = null;
   elevationLayer: Phaser.Tilemaps.TilemapLayer | null = null;
@@ -42,11 +51,11 @@ export class Game extends Scene {
     this.player?.setLevel(player_level);
 
     for (let i = 0; i < total_allies; i++) {
-      this.spawnEntity(Ally, ENTITY.ALLY, this.allies);
+      this.spawnAlly();
     }
 
     for (let i = 0; i < total_enemies; i++) {
-      this.spawnEntity(Slime, ENTITY.ENEMY.SLIME, this.enemies);
+      this.spawnEnemy();
     }
   };
 
@@ -58,10 +67,13 @@ export class Game extends Scene {
       type: string
     ) => T,
     entityType: string,
-    existingEntities: T[]
+    group: Phaser.Physics.Arcade.Group
   ): void {
     let spawnX: number, spawnY: number;
     let isOverlapping: boolean;
+
+    // Get existing entities from the group
+    const existingEntities = group.getChildren() as T[];
 
     do {
       spawnX = Math.random() * this.physics.world.bounds.right;
@@ -96,11 +108,10 @@ export class Game extends Scene {
 
   gameOver() {
     this.player?.destroy();
-    this.allies.forEach((ally) => ally.destroy());
-    this.enemies.forEach((enemy) => enemy.destroy());
 
-    this.allies = [];
-    this.enemies = [];
+    this.allies.clear(true, true);
+    this.enemies.clear(true, true);
+
     this.player = null;
 
     this.scene.stop();
@@ -131,12 +142,7 @@ export class Game extends Scene {
       total_allies: (prev.total_allies -= 1),
     }));
 
-    const index = this.allies.indexOf(ally);
-    if (index > -1) {
-      this.allies.splice(index, 1);
-    }
-
-    ally.destroy();
+    this.allies.remove(ally, true, true);
   };
 
   removeFromEnemies = (enemy: Enemy) => {
@@ -147,12 +153,7 @@ export class Game extends Scene {
       total_enemies: (prev.total_enemies -= 1),
     }));
 
-    const index = this.enemies.indexOf(enemy);
-    if (index > -1) {
-      this.enemies.splice(index, 1);
-    }
-
-    enemy.destroy();
+    this.enemies.remove(enemy, true, true);
   };
 
   create() {
@@ -195,6 +196,24 @@ export class Game extends Scene {
     });
 
     this.player = new Player(this, 640, 310, ENTITY.PLAYER);
+
+    this.allies = this.physics.add.group({
+      classType: Ally,
+      runChildUpdate: true,
+    });
+
+    this.enemies = this.physics.add.group({
+      classType: Enemy,
+      runChildUpdate: true,
+    });
+
+    this.physics.add.overlap(this.enemies, this.player, (enemy, player) => {
+      (enemy as Player).attackTarget(player as Player);
+    });
+
+    this.physics.add.overlap(this.enemies, this.allies, (enemy, ally) => {
+      (enemy as Enemy).attackTarget(ally as Ally);
+    });
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (!pointer.primaryDown) return;
@@ -257,13 +276,5 @@ export class Game extends Scene {
 
   update(time: number, delta: number) {
     this.player?.update(time, delta);
-
-    for (let i = 0; i < this.allies.length; i++) {
-      this.allies[i].update(time, delta);
-    }
-
-    for (let i = 0; i < this.enemies.length; i++) {
-      this.enemies[i].update(time, delta);
-    }
   }
 }

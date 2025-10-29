@@ -1,7 +1,7 @@
-import Projectile from "./projectile";
-import { Game as GameScene } from "../scenes/Game";
 import { ANIMS } from "../constants";
-import Enemy from "./enemy";
+import { Game as GameScene } from "../scenes/Game";
+import Entity from "./entity";
+import Projectile from "./projectile";
 
 export default class Fireball extends Projectile {
   private destX: number;
@@ -38,8 +38,8 @@ export default class Fireball extends Projectile {
     this.destroy();
   };
 
-  onHitEntity: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (e, f) => {
-    const enemy = e as Enemy;
+  onHitEntity: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (f, e) => {
+    const enemy = e as Entity;
     const fireball = f as Fireball;
 
     if (!enemy.body || !fireball.body) return;
