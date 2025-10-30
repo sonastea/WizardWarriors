@@ -176,7 +176,7 @@ export class Game extends Scene {
     const tileset = map.addTilesetImage("DesertTilemap", "tiles");
     if (!tileset) return Error("Tileset not found.");
 
-    map.createLayer("ground", tileset, 0, 0);
+    const groundLayer = map.createLayer("ground", tileset, 0, 0);
     this.elevationLayer = map.createLayer("elevation", tileset, 0, 0);
     this.collisionLayer = map.createLayer("collisions", tileset, 0, 0);
 
@@ -190,6 +190,26 @@ export class Game extends Scene {
       this.onCollideWithObstacleTiles,
       this
     );
+
+    if (groundLayer && this.elevationLayer && this.collisionLayer) {
+      const mapWidth = map.widthInPixels;
+      const mapHeight = map.heightInPixels;
+
+      const staticLayersTexture = this.add.renderTexture(
+        0,
+        0,
+        mapWidth,
+        mapHeight
+      );
+      staticLayersTexture.setDepth(-1);
+
+      staticLayersTexture.draw(groundLayer, 0, 0);
+      staticLayersTexture.draw(this.elevationLayer, 0, 0);
+
+      groundLayer.setVisible(true);
+      this.elevationLayer.setVisible(true);
+      this.collisionLayer.setVisible(true);
+    }
 
     this.input?.keyboard?.on("keydown-ESC", () => {
       this.scene.pause();
