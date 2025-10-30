@@ -51,14 +51,45 @@ export class Game extends Scene {
 
     this.player?.setLevel(player_level);
 
-    for (let i = 0; i < total_allies; i++) {
-      this.spawnAlly();
-    }
-
-    for (let i = 0; i < total_enemies; i++) {
-      this.spawnEnemy();
-    }
+    this.batchSpawnEntities(total_allies, total_enemies);
   };
+
+  /**
+   * Spawn entities in batches to prevent browser lockup
+   * Spreads expensive spawning operations across multiple frames
+   */
+  private batchSpawnEntities(totalAllies: number, totalEnemies: number): void {
+    const BATCH_SIZE = 10;
+    let alliesSpawned = 0;
+    let enemiesSpawned = 0;
+
+    const spawnBatch = () => {
+      const alliesToSpawn = Math.min(BATCH_SIZE, totalAllies - alliesSpawned);
+      for (let i = 0; i < alliesToSpawn; i++) {
+        this.spawnAlly();
+        alliesSpawned++;
+      }
+
+      const enemiesToSpawn = Math.min(
+        BATCH_SIZE,
+        totalEnemies - enemiesSpawned
+      );
+      for (let i = 0; i < enemiesToSpawn; i++) {
+        this.spawnEnemy();
+        enemiesSpawned++;
+      }
+
+      if (alliesSpawned < totalAllies || enemiesSpawned < totalEnemies) {
+        this.time.delayedCall(16, spawnBatch);
+      } else {
+        EventBus.emit("log-events", "All entities loaded!");
+      }
+    };
+
+    if (totalAllies > 0 || totalEnemies > 0) {
+      spawnBatch();
+    }
+  }
 
   private spawnEntity<T extends Phaser.GameObjects.Sprite>(
     entityClass: new (
@@ -72,23 +103,33 @@ export class Game extends Scene {
   ): void {
     let spawnX: number, spawnY: number;
     let isOverlapping: boolean;
+    const MIN_DISTANCE = 64;
+    const MAX_ATTEMPTS = 50;
+    let attempts = 0;
 
-    // Get existing entities from the group
     const existingEntities = group.getChildren() as T[];
 
     do {
       spawnX = Math.random() * this.physics.world.bounds.right;
       spawnY = Math.random() * this.physics.world.bounds.height;
 
+      if (existingEntities.length === 0) {
+        isOverlapping = false;
+        break;
+      }
+
+      const minDistSq = MIN_DISTANCE * MIN_DISTANCE;
       isOverlapping = existingEntities.some((existingEntity) => {
-        const distance = Phaser.Math.Distance.Between(
-          spawnX,
-          spawnY,
-          existingEntity.x,
-          existingEntity.y
-        );
-        return distance < existingEntity.width;
+        const dx = spawnX - existingEntity.x;
+        const dy = spawnY - existingEntity.y;
+        const distSq = dx * dx + dy * dy;
+        return distSq < minDistSq;
       });
+
+      attempts++;
+      if (attempts >= MAX_ATTEMPTS) {
+        isOverlapping = false;
+      }
     } while (isOverlapping);
 
     new entityClass(this, spawnX, spawnY, entityType);
