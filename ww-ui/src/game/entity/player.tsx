@@ -1,4 +1,4 @@
-import { ANIMS, ENTITY } from "../constants";
+import { ANIMS } from "../constants";
 import { Game as GameScene } from "../scenes/Game";
 import Ally from "./ally";
 import Entity from "./entity";
@@ -18,6 +18,8 @@ export default class Player extends Entity {
     LEFT: Phaser.Input.Keyboard.Key;
     RIGHT: Phaser.Input.Keyboard.Key;
   };
+
+  protected lastAnimationKey: string = "";
 
   constructor(scene: GameScene, x: number, y: number, texture: string) {
     super(scene, x, y, texture);
@@ -45,22 +47,27 @@ export default class Player extends Entity {
   incPlayerKills = () => {};
 
   castFireball = (destX: number, destY: number) => {
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, destX, destY);
-    const fireball = new Fireball(
-      this.scene,
+    let fireball: Fireball = this.scene.fireballPool.get(
       this.x,
       this.y,
-      destX,
-      destY,
-      this.attack,
-      ENTITY.SKILL.FIREBALL
+      "fireball"
     );
 
-    fireball.setRotation(angle);
-    fireball.setVelocity(
-      Math.cos(angle) * fireball.speed,
-      Math.sin(angle) * fireball.speed
-    );
+    if (!fireball) {
+      const oldest: Fireball = this.scene.fireballPool.getFirstAlive();
+      if (oldest) {
+        oldest.explode();
+        fireball = this.scene.fireballPool.get(
+          this.x,
+          this.y,
+          "fireball"
+        ) as Fireball;
+      }
+    }
+
+    if (fireball) {
+      fireball.fire(this.x, this.y, destX, destY, this.attack);
+    }
   };
 
   takeDamage = (
@@ -95,26 +102,36 @@ export default class Player extends Entity {
     });
   };
 
+  /**
+   * Play animation only if different from current (avoids redundant play calls)
+   */
+  private playAnimationCached(key: string): void {
+    if (this.lastAnimationKey !== key) {
+      this.play(key, true);
+      this.lastAnimationKey = key;
+    }
+  }
+
   update(_time: number, _delta: number): void {
     if (!this.scene.input.keyboard) return;
 
     if (this.keys.W.isDown || this.keys.UP.isDown) {
       this.setVelocityY(-1 * this.speed);
-      this.play(ANIMS.PLAYER.UP, true);
+      this.playAnimationCached(ANIMS.PLAYER.UP);
     } else if (this.keys.A.isDown || this.keys.LEFT.isDown) {
       this.setVelocityX(-1 * this.speed);
-      this.play(ANIMS.PLAYER.LEFT, true);
+      this.playAnimationCached(ANIMS.PLAYER.LEFT);
     } else if (this.keys.S.isDown || this.keys.DOWN.isDown) {
       this.setVelocityY(1 * this.speed);
-      this.play(ANIMS.PLAYER.DOWN, true);
+      this.playAnimationCached(ANIMS.PLAYER.DOWN);
     } else if (this.keys.D.isDown || this.keys.RIGHT.isDown) {
       this.setVelocityX(1 * this.speed);
-      this.play(ANIMS.PLAYER.RIGHT, true);
+      this.playAnimationCached(ANIMS.PLAYER.RIGHT);
     } else {
       this.setVelocityX(0);
       this.setVelocityY(0);
 
-      this.play(ANIMS.PLAYER.IDLE);
+      this.playAnimationCached(ANIMS.PLAYER.IDLE);
     }
   }
 }

@@ -20,6 +20,7 @@ export class Game extends Scene {
 
   allies!: Phaser.Physics.Arcade.Group;
   enemies!: Phaser.Physics.Arcade.Group;
+  fireballPool!: Phaser.Physics.Arcade.Group;
 
   get getAllies(): Ally[] {
     return this.allies.getChildren() as Ally[];
@@ -207,12 +208,33 @@ export class Game extends Scene {
       runChildUpdate: true,
     });
 
+    this.fireballPool = this.physics.add.group({
+      classType: Fireball,
+      maxSize: 50,
+      runChildUpdate: true,
+      createCallback: (f) => {
+        const fireball = f as Fireball;
+        fireball.setName("fireball");
+      },
+    });
+
     this.physics.add.overlap(this.enemies, this.player, (enemy, player) => {
       (enemy as Player).attackTarget(player as Player);
     });
 
     this.physics.add.overlap(this.enemies, this.allies, (enemy, ally) => {
       (enemy as Enemy).attackTarget(ally as Ally);
+    });
+
+    this.physics.add.overlap(this.fireballPool, this.enemies, (f, e) => {
+      const fireball = f as Fireball;
+      const enemy = e as Enemy;
+
+      if (!fireball.active || !enemy.active) return;
+      if (!fireball.body || !enemy.body) return;
+
+      fireball.explode();
+      enemy.takeDamage(fireball.damage, fireball);
     });
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {

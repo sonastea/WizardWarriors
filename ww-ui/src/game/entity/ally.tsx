@@ -14,7 +14,6 @@ export default class Ally extends Entity {
   private updateInterval: number = 333;
   private lastUpdatePosition: Phaser.Math.Vector2;
   private movementThreshold: number = 40;
-  private lastAnimationKey: string = "";
 
   constructor(scene: GameScene, x: number, y: number, texture: string) {
     super(scene, x, y, texture);

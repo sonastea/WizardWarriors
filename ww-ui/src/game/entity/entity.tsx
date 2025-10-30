@@ -27,6 +27,8 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
 
   damageCooldowns = new Set<string>();
 
+  protected lastAnimationKey: string = "";
+
   constructor(scene: GameScene, x: number, y: number, texture: string) {
     super(scene, x, y, texture);
 

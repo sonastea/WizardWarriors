@@ -97,7 +97,17 @@ export default class Enemy extends Entity {
     }
 
     this.moveToTarget();
-    this.play(this.texture.key + "-idle", true);
+    this.playAnimationCached(this.texture.key + "-idle");
+  }
+
+  /**
+   * Play animation only if different from current (avoids redundant play calls)
+   */
+  private playAnimationCached(key: string): void {
+    if (this.lastAnimationKey !== key) {
+      this.play(key, true);
+      this.lastAnimationKey = key;
+    }
   }
 
   /**
