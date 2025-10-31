@@ -185,12 +185,20 @@ export default class Ally extends Entity {
     );
 
     // standing still near target (only applies to player)
-    if (this.target === this.scene.player && distance < this.minDistanceToPlayer) {
+    if (
+      this.target === this.scene.player &&
+      distance < this.minDistanceToPlayer
+    ) {
       this.playAnimationCached(`${this.texture.key}-idle`);
       return;
     }
 
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, this.target.x, this.target.y);
+    const angle = Phaser.Math.Angle.Between(
+      this.x,
+      this.y,
+      this.target.x,
+      this.target.y
+    );
     const RIGHT_BOUNDARY = Math.PI / 4;
     const LEFT_BOUNDARY = -Math.PI / 4;
     const UP_BOUNDARY = -(3 * Math.PI) / 4;
