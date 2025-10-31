@@ -148,7 +148,21 @@ export class Game extends Scene {
     window.addEventListener("beforeunload", onBeforeUnload);
   };
 
+  stopSpawnTimers() {
+    if (this.allySpawnTimer) {
+      this.allySpawnTimer.remove();
+      this.allySpawnTimer = undefined;
+    }
+
+    if (this.enemySpawnTimer) {
+      this.enemySpawnTimer.remove();
+      this.enemySpawnTimer = undefined;
+    }
+  }
+
   gameOver() {
+    this.stopSpawnTimers();
+
     this.player?.destroy();
 
     this.allies.clear(true, true);
@@ -253,6 +267,7 @@ export class Game extends Scene {
     }
 
     this.input?.keyboard?.on("keydown-ESC", () => {
+      this.stopSpawnTimers();
       this.scene.pause();
       this.scene.run(SCENES.PAUSE);
     });
@@ -307,6 +322,9 @@ export class Game extends Scene {
     this.startEnemySpawnLoop();
 
     this.loadGameStats(getGameStats());
+
+    this.events.on("shutdown", this.stopSpawnTimers, this);
+    this.events.on("pause", this.stopSpawnTimers, this);
 
     EventBus?.emit("current-scene-ready", this);
   }
