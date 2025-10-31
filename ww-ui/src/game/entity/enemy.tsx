@@ -1,10 +1,17 @@
 import { Game as GameScene } from "../scenes/Game";
-import Ally from "./ally";
 import Entity from "./entity";
-import Player from "./player";
 
 export default class Enemy extends Entity {
   declare scene: GameScene;
+
+  // Spatial partitioning optimization (delta-time based)
+  private timeSinceLastUpdate: number = 0; // Accumulated time in ms
+  private updateInterval: number = 500; // Update every 500ms (0.5 seconds)
+  private lastUpdatePosition: Phaser.Math.Vector2;
+  private movementThreshold: number = 50; // Update if moved 50px
+  private lastTargetDistance: number = Infinity;
+  private quickCheckInterval: number = 100; // Quick escape check every 100ms
+  private timeSinceQuickCheck: number = 0;
 
   constructor(scene: GameScene, x: number, y: number, texture: string) {
     super(scene, x, y, texture);
@@ -20,17 +27,15 @@ export default class Enemy extends Entity {
     this.setCollideWorldBounds(true);
     this.initializeHealthBar(x, y, this.width, 4);
 
-    scene.enemies.push(this);
+    // Add to group (group is the single source of truth)
+    scene.enemies.add(this);
 
-    scene.physics.add.collider(this, scene.player!, () =>
-      this.attackTarget(scene.player!)
-    );
+    // Initialize spatial tracking
+    this.lastUpdatePosition = new Phaser.Math.Vector2(x, y);
 
-    for (let i = 0; i < scene.allies.length; i++) {
-      scene.physics.add.overlap(this, scene.allies[i], () =>
-        this.attackTarget(scene.allies[i])
-      );
-    }
+    // Randomize initial time offset to spread CPU load across frames
+    this.timeSinceLastUpdate = Phaser.Math.Between(0, this.updateInterval);
+    this.timeSinceQuickCheck = Phaser.Math.Between(0, this.quickCheckInterval);
   }
 
   setDead = () => {
@@ -40,19 +45,13 @@ export default class Enemy extends Entity {
     this.setActive(false).setVisible(false);
   };
 
-  attackTarget = (target: Player | Ally) => {
-    if (!target) return;
-    target.takeDamage(this.attack, this);
-  };
-
   findClosestTarget = () => {
     let closestTarget: Entity | null = null;
     let closestDistance = this.detectionRange;
 
     const player = this.scene.player;
-    const allies = this.scene.allies;
 
-    if (player) {
+    if (player && player.active) {
       const playerDistance = Phaser.Math.Distance.Between(
         this.x,
         this.y,
@@ -65,7 +64,9 @@ export default class Enemy extends Entity {
       }
     }
 
-    for (const ally of allies) {
+    for (const ally of this.scene.getAllies) {
+      if (!ally.active) continue; // Skip inactive allies
+
       const allyDistance = Phaser.Math.Distance.Between(
         this.x,
         this.y,
@@ -85,9 +86,79 @@ export default class Enemy extends Entity {
     this.target = target;
   };
 
-  update(_time: number, _delta: number): void {
-    this.findClosestTarget();
+  update(_time: number, delta: number): void {
+    this.timeSinceLastUpdate += delta;
+    this.timeSinceQuickCheck += delta;
+
+    if (this.shouldUpdateTarget(delta)) {
+      this.findClosestTarget();
+      this.timeSinceLastUpdate = 0;
+      this.lastUpdatePosition.set(this.x, this.y);
+    }
+
     this.moveToTarget();
-    this.play(this.texture.key + "-idle", true);
+    this.playAnimationCached(this.texture.key + "-idle");
+  }
+
+  /**
+   * Play animation only if different from current (avoids redundant play calls)
+   */
+  private playAnimationCached(key: string): void {
+    if (this.lastAnimationKey !== key) {
+      this.play(key, true);
+      this.lastAnimationKey = key;
+    }
+  }
+
+  /**
+   * Spatial partitioning logic using delta-time (frame-rate independent)
+   * @param delta - Time elapsed since last frame in milliseconds
+   */
+  private shouldUpdateTarget(_delta: number): boolean {
+    // Condition 1: temporal, minimum update interval reached (500ms)
+    if (this.timeSinceLastUpdate >= this.updateInterval) {
+      return true;
+    }
+
+    // Condition 2: spatial, moved significantly since last update
+    const distanceMoved = Phaser.Math.Distance.Between(
+      this.x,
+      this.y,
+      this.lastUpdatePosition.x,
+      this.lastUpdatePosition.y
+    );
+    if (distanceMoved >= this.movementThreshold) {
+      return true;
+    }
+
+    // Condition 3: no target currently set
+    if (!this.target) {
+      return true;
+    }
+
+    // Condition 4: current target is dead or inactive
+    if (!this.target.active || this.target.health <= 0) {
+      return true;
+    }
+
+    // Condition 5: target escaped detection range (quick check every 100ms)
+    if (this.timeSinceQuickCheck >= this.quickCheckInterval) {
+      this.timeSinceQuickCheck = 0;
+
+      const currentTargetDistance = Phaser.Math.Distance.Between(
+        this.x,
+        this.y,
+        this.target.x,
+        this.target.y
+      );
+
+      if (currentTargetDistance > this.detectionRange * 1.5) {
+        return true;
+      }
+
+      this.lastTargetDistance = currentTargetDistance;
+    }
+
+    return false;
   }
 }

@@ -15,9 +15,9 @@ import (
 )
 
 type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 type PlayerSaveRequestBody struct {
@@ -81,9 +81,11 @@ func registerHandler(us userService) http.HandlerFunc {
 			Name:     "ww-userId",
 			Value:    fmt.Sprintf("%d", userId),
 			Path:     "/",
-			Domain:   getDomain(),
+			Domain:   getDomain(r),
 			Secure:   isProduction(),
+			HttpOnly: false,
 			SameSite: getSameSite(),
+			MaxAge:   86400 * 7,
 		})
 
 		response := APIResponse{
@@ -134,9 +136,11 @@ func loginHandler(us userService) http.HandlerFunc {
 			Name:     "ww-userId",
 			Value:    fmt.Sprintf("%d", userId),
 			Path:     "/",
-			Domain:   getDomain(),
+			Domain:   getDomain(r),
 			Secure:   isProduction(),
+			HttpOnly: false,
 			SameSite: getSameSite(),
+			MaxAge:   86400 * 7,
 		})
 
 		saves, err := us.PlayerSaves(ctx)
@@ -221,8 +225,6 @@ func saveGameHandler(us userService) http.HandlerFunc {
 			http.Error(w, ErrorResponse("Error retrieving cookie."), http.StatusInternalServerError)
 			return
 		}
-
-		log.Printf("ww-userId cookie: %+v, value: %+v \n", cookie, cookie.Value)
 
 		userID, err := strconv.Atoi(cookie.Value)
 		if err != nil {

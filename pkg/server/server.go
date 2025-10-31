@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -119,9 +120,13 @@ func isProduction() bool {
 	return os.Getenv("ENV") == "production"
 }
 
-func getDomain() string {
+func getDomain(r *http.Request) string {
 	if isProduction() {
 		return ".wizardwarriors.com"
+	}
+	host := r.Host
+	if strings.Contains(host, ".ww.local") || strings.Contains(host, "ww.local") {
+		return ".ww.local"
 	}
 	return ""
 }
