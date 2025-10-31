@@ -1,28 +1,37 @@
-import { FlatCompat } from "@eslint/eslintrc";
 import js from "@eslint/js";
 import prettier from "eslint-plugin-prettier";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import react from "eslint-plugin-react";
+import tseslint from "typescript-eslint";
+import globals from "globals";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
-
-const config = [
-  ...compat.extends(
-    "next/core-web-vitals",
-    "next/typescript",
-    "plugin:prettier/recommended"
-  ),
+export default [
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   {
+    files: ["**/*.{js,mjs,cjs,jsx,ts,tsx}"],
     plugins: {
+      react,
       prettier,
     },
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
     rules: {
+      ...react.configs.recommended.rules,
+      ...react.configs["jsx-runtime"].rules,
+      "react/react-in-jsx-scope": "off",
+      "react/prop-types": "off",
+
+      "prettier/prettier": "error",
+
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -35,8 +44,15 @@ const config = [
           ignoreRestSiblings: true,
         },
       ],
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
     },
   },
+  {
+    ignores: [".next/*", "out/*", "build/*", "next-env.d.ts"],
+  },
 ];
-
-export default config;

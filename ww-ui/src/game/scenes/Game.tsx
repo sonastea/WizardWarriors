@@ -17,8 +17,18 @@ import Fireball from "../entity/fireball";
 
 export class Game extends Scene {
   player: Player | null;
-  allies: Ally[] = [];
-  enemies: Enemy[] = [];
+
+  allies!: Phaser.Physics.Arcade.Group;
+  enemies!: Phaser.Physics.Arcade.Group;
+  fireballPool!: Phaser.Physics.Arcade.Group;
+
+  get getAllies(): Ally[] {
+    return this.allies.getChildren() as Ally[];
+  }
+
+  get getEnemies(): Enemy[] {
+    return this.enemies.getChildren() as Enemy[];
+  }
 
   collisionLayer: Phaser.Tilemaps.TilemapLayer | null = null;
   elevationLayer: Phaser.Tilemaps.TilemapLayer | null = null;
@@ -41,14 +51,45 @@ export class Game extends Scene {
 
     this.player?.setLevel(player_level);
 
-    for (let i = 0; i < total_allies; i++) {
-      this.spawnEntity(Ally, ENTITY.ALLY, this.allies);
-    }
-
-    for (let i = 0; i < total_enemies; i++) {
-      this.spawnEntity(Slime, ENTITY.ENEMY.SLIME, this.enemies);
-    }
+    this.batchSpawnEntities(total_allies, total_enemies);
   };
+
+  /**
+   * Spawn entities in batches to prevent browser lockup
+   * Spreads expensive spawning operations across multiple frames
+   */
+  private batchSpawnEntities(totalAllies: number, totalEnemies: number): void {
+    const BATCH_SIZE = 10;
+    let alliesSpawned = 0;
+    let enemiesSpawned = 0;
+
+    const spawnBatch = () => {
+      const alliesToSpawn = Math.min(BATCH_SIZE, totalAllies - alliesSpawned);
+      for (let i = 0; i < alliesToSpawn; i++) {
+        this.spawnAlly();
+        alliesSpawned++;
+      }
+
+      const enemiesToSpawn = Math.min(
+        BATCH_SIZE,
+        totalEnemies - enemiesSpawned
+      );
+      for (let i = 0; i < enemiesToSpawn; i++) {
+        this.spawnEnemy();
+        enemiesSpawned++;
+      }
+
+      if (alliesSpawned < totalAllies || enemiesSpawned < totalEnemies) {
+        this.time.delayedCall(16, spawnBatch);
+      } else {
+        EventBus.emit("log-events", "All entities loaded!");
+      }
+    };
+
+    if (totalAllies > 0 || totalEnemies > 0) {
+      spawnBatch();
+    }
+  }
 
   private spawnEntity<T extends Phaser.GameObjects.Sprite>(
     entityClass: new (
@@ -58,24 +99,37 @@ export class Game extends Scene {
       type: string
     ) => T,
     entityType: string,
-    existingEntities: T[]
+    group: Phaser.Physics.Arcade.Group
   ): void {
     let spawnX: number, spawnY: number;
     let isOverlapping: boolean;
+    const MIN_DISTANCE = 64;
+    const MAX_ATTEMPTS = 50;
+    let attempts = 0;
+
+    const existingEntities = group.getChildren() as T[];
 
     do {
       spawnX = Math.random() * this.physics.world.bounds.right;
       spawnY = Math.random() * this.physics.world.bounds.height;
 
+      if (existingEntities.length === 0) {
+        isOverlapping = false;
+        break;
+      }
+
+      const minDistSq = MIN_DISTANCE * MIN_DISTANCE;
       isOverlapping = existingEntities.some((existingEntity) => {
-        const distance = Phaser.Math.Distance.Between(
-          spawnX,
-          spawnY,
-          existingEntity.x,
-          existingEntity.y
-        );
-        return distance < existingEntity.width;
+        const dx = spawnX - existingEntity.x;
+        const dy = spawnY - existingEntity.y;
+        const distSq = dx * dx + dy * dy;
+        return distSq < minDistSq;
       });
+
+      attempts++;
+      if (attempts >= MAX_ATTEMPTS) {
+        isOverlapping = false;
+      }
     } while (isOverlapping);
 
     new entityClass(this, spawnX, spawnY, entityType);
@@ -94,13 +148,26 @@ export class Game extends Scene {
     window.addEventListener("beforeunload", onBeforeUnload);
   };
 
-  gameOver() {
-    this.player?.destroy();
-    this.allies.forEach((ally) => ally.destroy());
-    this.enemies.forEach((enemy) => enemy.destroy());
+  stopSpawnTimers() {
+    if (this.allySpawnTimer) {
+      this.allySpawnTimer.remove();
+      this.allySpawnTimer = undefined;
+    }
 
-    this.allies = [];
-    this.enemies = [];
+    if (this.enemySpawnTimer) {
+      this.enemySpawnTimer.remove();
+      this.enemySpawnTimer = undefined;
+    }
+  }
+
+  gameOver() {
+    this.stopSpawnTimers();
+
+    this.player?.destroy();
+
+    this.allies.clear(true, true);
+    this.enemies.clear(true, true);
+
     this.player = null;
 
     this.scene.stop();
@@ -131,12 +198,7 @@ export class Game extends Scene {
       total_allies: (prev.total_allies -= 1),
     }));
 
-    const index = this.allies.indexOf(ally);
-    if (index > -1) {
-      this.allies.splice(index, 1);
-    }
-
-    ally.destroy();
+    this.allies.remove(ally, true, true);
   };
 
   removeFromEnemies = (enemy: Enemy) => {
@@ -147,12 +209,7 @@ export class Game extends Scene {
       total_enemies: (prev.total_enemies -= 1),
     }));
 
-    const index = this.enemies.indexOf(enemy);
-    if (index > -1) {
-      this.enemies.splice(index, 1);
-    }
-
-    enemy.destroy();
+    this.enemies.remove(enemy, true, true);
   };
 
   create() {
@@ -174,7 +231,7 @@ export class Game extends Scene {
     const tileset = map.addTilesetImage("DesertTilemap", "tiles");
     if (!tileset) return Error("Tileset not found.");
 
-    map.createLayer("ground", tileset, 0, 0);
+    const groundLayer = map.createLayer("ground", tileset, 0, 0);
     this.elevationLayer = map.createLayer("elevation", tileset, 0, 0);
     this.collisionLayer = map.createLayer("collisions", tileset, 0, 0);
 
@@ -189,12 +246,72 @@ export class Game extends Scene {
       this
     );
 
+    if (groundLayer && this.elevationLayer && this.collisionLayer) {
+      const mapWidth = map.widthInPixels;
+      const mapHeight = map.heightInPixels;
+
+      const staticLayersTexture = this.add.renderTexture(
+        0,
+        0,
+        mapWidth,
+        mapHeight
+      );
+      staticLayersTexture.setDepth(-1);
+
+      staticLayersTexture.draw(groundLayer, 0, 0);
+      staticLayersTexture.draw(this.elevationLayer, 0, 0);
+
+      groundLayer.setVisible(true);
+      this.elevationLayer.setVisible(true);
+      this.collisionLayer.setVisible(true);
+    }
+
     this.input?.keyboard?.on("keydown-ESC", () => {
+      this.stopSpawnTimers();
       this.scene.pause();
       this.scene.run(SCENES.PAUSE);
     });
 
     this.player = new Player(this, 640, 310, ENTITY.PLAYER);
+
+    this.allies = this.physics.add.group({
+      classType: Ally,
+      runChildUpdate: true,
+    });
+
+    this.enemies = this.physics.add.group({
+      classType: Enemy,
+      runChildUpdate: true,
+    });
+
+    this.fireballPool = this.physics.add.group({
+      classType: Fireball,
+      maxSize: 50,
+      runChildUpdate: true,
+      createCallback: (f) => {
+        const fireball = f as Fireball;
+        fireball.setName("fireball");
+      },
+    });
+
+    this.physics.add.overlap(this.enemies, this.player, (enemy, player) => {
+      (enemy as Player).attackTarget(player as Player);
+    });
+
+    this.physics.add.overlap(this.enemies, this.allies, (enemy, ally) => {
+      (enemy as Enemy).attackTarget(ally as Ally);
+    });
+
+    this.physics.add.overlap(this.fireballPool, this.enemies, (f, e) => {
+      const fireball = f as Fireball;
+      const enemy = e as Enemy;
+
+      if (!fireball.active || !enemy.active) return;
+      if (!fireball.body || !enemy.body) return;
+
+      fireball.explode();
+      enemy.takeDamage(fireball.damage, fireball);
+    });
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (!pointer.primaryDown) return;
@@ -205,6 +322,9 @@ export class Game extends Scene {
     this.startEnemySpawnLoop();
 
     this.loadGameStats(getGameStats());
+
+    this.events.on("shutdown", this.stopSpawnTimers, this);
+    this.events.on("pause", this.stopSpawnTimers, this);
 
     EventBus?.emit("current-scene-ready", this);
   }
@@ -257,13 +377,5 @@ export class Game extends Scene {
 
   update(time: number, delta: number) {
     this.player?.update(time, delta);
-
-    for (let i = 0; i < this.allies.length; i++) {
-      this.allies[i].update(time, delta);
-    }
-
-    for (let i = 0; i < this.enemies.length; i++) {
-      this.enemies[i].update(time, delta);
-    }
   }
 }

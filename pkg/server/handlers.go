@@ -15,9 +15,9 @@ import (
 )
 
 type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 type PlayerSaveRequestBody struct {
@@ -225,8 +225,6 @@ func saveGameHandler(us userService) http.HandlerFunc {
 			http.Error(w, ErrorResponse("Error retrieving cookie."), http.StatusInternalServerError)
 			return
 		}
-
-		log.Printf("ww-userId cookie: %+v, value: %+v \n", cookie, cookie.Value)
 
 		userID, err := strconv.Atoi(cookie.Value)
 		if err != nil {

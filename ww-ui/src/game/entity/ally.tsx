@@ -1,13 +1,20 @@
 import { setGameStats } from "src/state";
 import { GameStats } from "src/types/index.types";
 import { Game as GameScene } from "../scenes/Game";
-import Enemy from "./enemy";
 import Entity from "./entity";
 
 export default class Ally extends Entity {
   declare scene: GameScene;
 
   minDistanceToPlayer: number = 20;
+  playerFollowRange: number = 300;
+  enemyDetectionRange: number = 200;
+
+  // spatial partitioning optimization (delta-time based)
+  private timeSinceLastUpdate: number = 0;
+  private updateInterval: number = 333;
+  private lastUpdatePosition: Phaser.Math.Vector2;
+  private movementThreshold: number = 40;
 
   constructor(scene: GameScene, x: number, y: number, texture: string) {
     super(scene, x, y, texture);
@@ -21,19 +28,12 @@ export default class Ally extends Entity {
     this.setScale(2);
     this.setCollideWorldBounds(true);
     this.initializeHealthBar(x, y, this.width, 4);
-    this.setTarget(scene.player); // allies should always be following the player
+    this.setTarget(null);
 
-    scene.allies.push(this);
+    scene.allies.add(this);
 
-    scene.physics.add.overlap(this, scene.player!, () => {
-      // TODO: Projectile to hit ally
-    });
-
-    for (let i = 0; i < scene.enemies.length; i++) {
-      scene.physics.add.overlap(this, scene.enemies[i], () =>
-        this.attackTarget(scene.enemies[i])
-      );
-    }
+    this.lastUpdatePosition = new Phaser.Math.Vector2(x, y);
+    this.timeSinceLastUpdate = Phaser.Math.Between(0, this.updateInterval);
   }
 
   setDead = () => {
@@ -50,37 +50,154 @@ export default class Ally extends Entity {
     }));
   };
 
-  attackTarget = (target: Enemy) => {
-    if (!target) return;
-    target.takeDamage(this.attack, this);
-  };
-
   shouldStopMoving = (distance: number): boolean => {
-    return distance < this.minDistanceToPlayer;
+    if (this.target === this.scene.player) {
+      return distance < this.minDistanceToPlayer;
+    }
+    return false;
   };
 
-  update(_time: number, _delta: number): void {
-    this.moveToTarget();
+  update(_time: number, delta: number): void {
+    this.timeSinceLastUpdate += delta;
 
-    const player = this.scene.player!;
-    const playerBounds = player.getBounds();
+    if (this.shouldUpdateTarget(delta)) {
+      this.updateTarget();
+      this.timeSinceLastUpdate = 0;
+      this.lastUpdatePosition.set(this.x, this.y);
+    }
+
+    this.moveToTarget();
+    this.updateAnimation();
+  }
+
+  /**
+   * Spatial partitioning logic using delta-time (frame-rate independent)
+   * @param delta - Time elapsed since last frame in milliseconds
+   */
+  private shouldUpdateTarget(_delta: number): boolean {
+    // condition 1: temporal, minimum update interval reached (333ms)
+    if (this.timeSinceLastUpdate >= this.updateInterval) {
+      return true;
+    }
+
+    // Condition 2: Spatial, moved significantly since last update
+    const distanceMoved = Phaser.Math.Distance.Between(
+      this.x,
+      this.y,
+      this.lastUpdatePosition.x,
+      this.lastUpdatePosition.y
+    );
+    if (distanceMoved >= this.movementThreshold) {
+      return true;
+    }
+
+    // condition 3: no target currently set
+    if (!this.target) {
+      return true;
+    }
+
+    // condition 4: target is dead/inactive
+    if (!this.target.active) {
+      return true;
+    }
+
+    // condition 5: player is dead (game over)
+    if (!this.scene.player || !this.scene.player.active) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Update target based on proximity:
+   * - If player is within followRange, follow player
+   * - Otherwise, look for nearby enemies
+   */
+  private updateTarget(): void {
+    const player = this.scene.player;
+    if (!player || !player.active) {
+      this.setTarget(null);
+      return;
+    }
+
+    const distanceToPlayer = Phaser.Math.Distance.Between(
+      this.x,
+      this.y,
+      player.x,
+      player.y
+    );
+
+    // priorty 1: follow player if within range
+    if (distanceToPlayer <= this.playerFollowRange) {
+      this.setTarget(player);
+      return;
+    }
+
+    // priority 2: look for nearby enemies
+    const nearbyEnemy = this.findNearestEnemy();
+    if (nearbyEnemy) {
+      this.setTarget(nearbyEnemy);
+      return;
+    }
+
+    this.setTarget(null);
+  }
+
+  /**
+   * Find the nearest enemy within detection range
+   */
+  private findNearestEnemy(): Entity | null {
+    const enemies = this.scene.enemies.getChildren() as Entity[];
+    let nearestEnemy: Entity | null = null;
+    let nearestDistanceSq = this.enemyDetectionRange * this.enemyDetectionRange;
+
+    for (const enemy of enemies) {
+      if (!enemy.active) continue;
+
+      const dx = enemy.x - this.x;
+      const dy = enemy.y - this.y;
+      const distanceSq = dx * dx + dy * dy;
+
+      if (distanceSq < nearestDistanceSq) {
+        nearestDistanceSq = distanceSq;
+        nearestEnemy = enemy;
+      }
+    }
+
+    return nearestEnemy;
+  }
+
+  /**
+   * Update animation based on movement direction (cached to avoid redundant plays)
+   */
+  private updateAnimation(): void {
+    if (!this.target) {
+      this.playAnimationCached(`${this.texture.key}-idle`);
+      return;
+    }
+
     const distance = Phaser.Math.Distance.Between(
       this.x,
       this.y,
-      playerBounds.centerX,
-      playerBounds.centerY
+      this.target.x,
+      this.target.y
     );
 
-    if (distance < this.minDistanceToPlayer) {
-      this.play(`${this.texture.key}-idle`, true);
+    // standing still near target (only applies to player)
+    if (
+      this.target === this.scene.player &&
+      distance < this.minDistanceToPlayer
+    ) {
+      this.playAnimationCached(`${this.texture.key}-idle`);
       return;
     }
 
     const angle = Phaser.Math.Angle.Between(
       this.x,
       this.y,
-      playerBounds.centerX,
-      playerBounds.centerY
+      this.target.x,
+      this.target.y
     );
     const RIGHT_BOUNDARY = Math.PI / 4;
     const LEFT_BOUNDARY = -Math.PI / 4;
@@ -89,14 +206,24 @@ export default class Ally extends Entity {
 
     if (angle >= LEFT_BOUNDARY && angle <= RIGHT_BOUNDARY) {
       this.setFlipX(true);
-      this.play(`${this.texture.key}-right`, true);
+      this.playAnimationCached(`${this.texture.key}-right`);
     } else if (angle > RIGHT_BOUNDARY && angle < DOWN_BOUNDARY) {
-      this.play(`${this.texture.key}-down`, true);
+      this.playAnimationCached(`${this.texture.key}-down`);
     } else if (angle <= LEFT_BOUNDARY && angle > UP_BOUNDARY) {
-      this.play(`${this.texture.key}-up`, true);
+      this.playAnimationCached(`${this.texture.key}-up`);
     } else {
       this.setFlipX(false);
-      this.play(`${this.texture.key}-left`, true);
+      this.playAnimationCached(`${this.texture.key}-left`);
+    }
+  }
+
+  /**
+   * Play animation only if different from current (avoids redundant play calls)
+   */
+  private playAnimationCached(key: string): void {
+    if (this.lastAnimationKey !== key) {
+      this.play(key, true);
+      this.lastAnimationKey = key;
     }
   }
 }

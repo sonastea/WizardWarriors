@@ -1,5 +1,6 @@
 import { GameObjects, Scene } from "phaser";
 import { SCENES } from "../constants";
+import { Game } from "./Game";
 
 export default class PauseScene extends Scene {
   PauseText: GameObjects.Text | null = null;
@@ -16,6 +17,13 @@ export default class PauseScene extends Scene {
     this.input?.keyboard?.on("keydown-ESC", () => {
       this.PauseText?.setVisible(false);
       this.scene.pause();
+
+      const gameScene = this.scene.get(SCENES.GAME) as Game;
+      if (gameScene) {
+        gameScene.startAllySpawnLoop();
+        gameScene.startEnemySpawnLoop();
+      }
+
       this.scene.run(SCENES.GAME);
     });
 
