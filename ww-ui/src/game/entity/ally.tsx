@@ -7,7 +7,8 @@ export default class Ally extends Entity {
   declare scene: GameScene;
 
   minDistanceToPlayer: number = 20;
-  playerDetectionRange: number = 300;
+  playerFollowRange: number = 300;
+  enemyDetectionRange: number = 200;
 
   // spatial partitioning optimization (delta-time based)
   private timeSinceLastUpdate: number = 0;
@@ -27,7 +28,7 @@ export default class Ally extends Entity {
     this.setScale(2);
     this.setCollideWorldBounds(true);
     this.initializeHealthBar(x, y, this.width, 4);
-    this.setTarget(scene.player); // allies should always be following the player
+    this.setTarget(null);
 
     scene.allies.add(this);
 
@@ -50,14 +51,17 @@ export default class Ally extends Entity {
   };
 
   shouldStopMoving = (distance: number): boolean => {
-    return distance < this.minDistanceToPlayer;
+    if (this.target === this.scene.player) {
+      return distance < this.minDistanceToPlayer;
+    }
+    return false;
   };
 
   update(_time: number, delta: number): void {
     this.timeSinceLastUpdate += delta;
 
-    if (this.shouldUpdatePlayerTarget(delta)) {
-      this.updatePlayerTarget();
+    if (this.shouldUpdateTarget(delta)) {
+      this.updateTarget();
       this.timeSinceLastUpdate = 0;
       this.lastUpdatePosition.set(this.x, this.y);
     }
@@ -70,7 +74,7 @@ export default class Ally extends Entity {
    * Spatial partitioning logic using delta-time (frame-rate independent)
    * @param delta - Time elapsed since last frame in milliseconds
    */
-  private shouldUpdatePlayerTarget(_delta: number): boolean {
+  private shouldUpdateTarget(_delta: number): boolean {
     // condition 1: temporal, minimum update interval reached (333ms)
     if (this.timeSinceLastUpdate >= this.updateInterval) {
       return true;
@@ -92,7 +96,12 @@ export default class Ally extends Entity {
       return true;
     }
 
-    // condition 4: player is dead (game over)
+    // condition 4: target is dead/inactive
+    if (!this.target.active) {
+      return true;
+    }
+
+    // condition 5: player is dead (game over)
     if (!this.scene.player || !this.scene.player.active) {
       return true;
     }
@@ -101,11 +110,13 @@ export default class Ally extends Entity {
   }
 
   /**
-   * Update target to player if within detection range
+   * Update target based on proximity:
+   * - If player is within followRange, follow player
+   * - Otherwise, look for nearby enemies
    */
-  private updatePlayerTarget(): void {
+  private updateTarget(): void {
     const player = this.scene.player;
-    if (!player) {
+    if (!player || !player.active) {
       this.setTarget(null);
       return;
     }
@@ -117,19 +128,51 @@ export default class Ally extends Entity {
       player.y
     );
 
-    if (distanceToPlayer <= this.playerDetectionRange) {
+    // priorty 1: follow player if within range
+    if (distanceToPlayer <= this.playerFollowRange) {
       this.setTarget(player);
-    } else {
-      this.setTarget(null);
+      return;
     }
+
+    // priority 2: look for nearby enemies
+    const nearbyEnemy = this.findNearestEnemy();
+    if (nearbyEnemy) {
+      this.setTarget(nearbyEnemy);
+      return;
+    }
+
+    this.setTarget(null);
+  }
+
+  /**
+   * Find the nearest enemy within detection range
+   */
+  private findNearestEnemy(): Entity | null {
+    const enemies = this.scene.enemies.getChildren() as Entity[];
+    let nearestEnemy: Entity | null = null;
+    let nearestDistanceSq = this.enemyDetectionRange * this.enemyDetectionRange;
+
+    for (const enemy of enemies) {
+      if (!enemy.active) continue;
+
+      const dx = enemy.x - this.x;
+      const dy = enemy.y - this.y;
+      const distanceSq = dx * dx + dy * dy;
+
+      if (distanceSq < nearestDistanceSq) {
+        nearestDistanceSq = distanceSq;
+        nearestEnemy = enemy;
+      }
+    }
+
+    return nearestEnemy;
   }
 
   /**
    * Update animation based on movement direction (cached to avoid redundant plays)
    */
   private updateAnimation(): void {
-    const player = this.scene.player;
-    if (!player) {
+    if (!this.target) {
       this.playAnimationCached(`${this.texture.key}-idle`);
       return;
     }
@@ -137,18 +180,17 @@ export default class Ally extends Entity {
     const distance = Phaser.Math.Distance.Between(
       this.x,
       this.y,
-      player.x,
-      player.y
+      this.target.x,
+      this.target.y
     );
 
-    // Standing still near player
-    if (distance < this.minDistanceToPlayer) {
+    // standing still near target (only applies to player)
+    if (this.target === this.scene.player && distance < this.minDistanceToPlayer) {
       this.playAnimationCached(`${this.texture.key}-idle`);
       return;
     }
 
-    // Moving - calculate direction
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
+    const angle = Phaser.Math.Angle.Between(this.x, this.y, this.target.x, this.target.y);
     const RIGHT_BOUNDARY = Math.PI / 4;
     const LEFT_BOUNDARY = -Math.PI / 4;
     const UP_BOUNDARY = -(3 * Math.PI) / 4;
