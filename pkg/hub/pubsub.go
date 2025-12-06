@@ -12,7 +12,7 @@ import (
 )
 
 type Stores struct {
-	UserStore *store.UserStore
+	UserStore store.UserStore
 }
 
 type Realm string
@@ -22,10 +22,10 @@ type PubSub struct {
 	subs          []Realm
 	subscriptions map[Realm]*redis.PubSub
 
-	userStore *store.UserStore
+	userStore store.UserStore
 }
 
-func NewPubSub(cfg *config.Config, stores Stores, pool *redis.Client) (*PubSub, error) {
+func NewPubSub(cfg *config.Config, stores *Stores, pool *redis.Client) (*PubSub, error) {
 	opt, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("RedisUrl Error: %s\n", err)
@@ -37,12 +37,17 @@ func NewPubSub(cfg *config.Config, stores Stores, pool *redis.Client) (*PubSub, 
 		"lobby",
 	}
 
+	var userStore store.UserStore
+	if stores != nil {
+		userStore = stores.UserStore
+	}
+
 	pubsub := &PubSub{
 		conn:          conn,
 		subs:          subs,
 		subscriptions: make(map[Realm]*redis.PubSub),
 
-		userStore: stores.UserStore,
+		userStore: userStore,
 	}
 
 	return pubsub, nil
@@ -54,12 +59,9 @@ func (h *Hub) ListenPubSub(ctx context.Context) {
 		h.pubsub.subscriptions[sub] = ch
 	}
 
-	for {
-		select {
-		case msg := <-h.pubsub.subscriptions["lobby"].Channel():
-			// h.sendToRoom("lobby", msg.Payload)
-			topics := strings.Split(msg.Channel, ".")
-			fmt.Printf("%+v\n", topics)
-		}
+	for msg := range h.pubsub.subscriptions["lobby"].Channel() {
+		// h.sendToRoom("lobby", msg.Payload)
+		topics := strings.Split(msg.Channel, ".")
+		fmt.Printf("%+v\n", topics)
 	}
 }

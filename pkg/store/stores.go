@@ -75,7 +75,7 @@ type UserCredentials struct {
 	Password string `json:"password"`
 }
 
-type userStore interface {
+type UserStore interface {
 	Add(username, password string) (int, error)
 	Remove()
 	Login(ctx context.Context, username, password string) (context.Context, error)
@@ -86,16 +86,16 @@ type userStore interface {
 	SaveGame(ctx context.Context, game_stats GameStats) (PlayerSaveResponse, error)
 }
 
-type UserStore struct {
+type userStore struct {
 	pool *pgxpool.Pool
 }
 
-func NewUserStore(pool *pgxpool.Pool) *UserStore {
-	return &UserStore{pool: pool}
+func NewUserStore(pool *pgxpool.Pool) *userStore {
+	return &userStore{pool: pool}
 }
 
 // Add adds a new user and returns the user id.
-func (us *UserStore) Add(username, password string) (int, error) {
+func (us *userStore) Add(username, password string) (int, error) {
 	query := `
 		INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id;
 	`
@@ -109,9 +109,9 @@ func (us *UserStore) Add(username, password string) (int, error) {
 	return userID, err
 }
 
-func (us *UserStore) Remove() {}
+func (us *userStore) Remove() {}
 
-func (us *UserStore) Login(ctx context.Context, username, password string) (context.Context, error) {
+func (us *userStore) Login(ctx context.Context, username, password string) (context.Context, error) {
 	var userId int
 	err := us.pool.QueryRow(ctx, `
 		SELECT id FROM users WHERE username = $1 AND password = $2
@@ -125,7 +125,7 @@ func (us *UserStore) Login(ctx context.Context, username, password string) (cont
 	return ctx, nil
 }
 
-func (us *UserStore) PlayerSave(ctx context.Context, game_id int) (PlayerSaveResponse, error) {
+func (us *userStore) PlayerSave(ctx context.Context, game_id int) (PlayerSaveResponse, error) {
 	query := `
     SELECT DISTINCT ON (ps.id)
 			ps.id,
@@ -180,7 +180,7 @@ func (us *UserStore) PlayerSave(ctx context.Context, game_id int) (PlayerSaveRes
 	return save, nil
 }
 
-func (us *UserStore) PlayerSaves(ctx context.Context) ([]PlayerSaveResponse, error) {
+func (us *userStore) PlayerSaves(ctx context.Context) ([]PlayerSaveResponse, error) {
 	userId, ok := ctx.Value("userId").(int)
 	if !ok {
 		return nil, fmt.Errorf("User is not logged in.")
@@ -253,9 +253,9 @@ func (us *UserStore) PlayerSaves(ctx context.Context) ([]PlayerSaveResponse, err
 	return saves, nil
 }
 
-func (us *UserStore) GetAll() {}
+func (us *userStore) GetAll() {}
 
-func (us *UserStore) Leaderboard(ctx context.Context) ([]GameStatsResponse, error) {
+func (us *userStore) Leaderboard(ctx context.Context) ([]GameStatsResponse, error) {
 	query := `
 		SELECT
 			eGS.id,
@@ -320,7 +320,7 @@ func (us *UserStore) Leaderboard(ctx context.Context) ([]GameStatsResponse, erro
 	return results, nil
 }
 
-func (us *UserStore) SaveGame(ctx context.Context, game_stats GameStats) (GameStats, error) {
+func (us *userStore) SaveGame(ctx context.Context, game_stats GameStats) (GameStats, error) {
 	gameStatsQuery := `
 		INSERT INTO game_stats (
 			user_id,

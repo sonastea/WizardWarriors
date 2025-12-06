@@ -35,7 +35,7 @@ type Client struct {
 
 	hub *Hub
 
-	send chan []byte
+	sendChan chan []byte
 }
 
 func NewClient(hub *Hub, conn *websocket.Conn) error {
@@ -47,7 +47,7 @@ func NewClient(hub *Hub, conn *websocket.Conn) error {
 		Password: "",
 		hub:      hub,
 		conn:     conn,
-		send:     make(chan []byte),
+		sendChan: make(chan []byte),
 	}
 
 	hub.register <- client
@@ -55,7 +55,7 @@ func NewClient(hub *Hub, conn *websocket.Conn) error {
 	go client.writePump()
 	go client.readPump()
 
-    return nil
+	return nil
 }
 
 func (client *Client) GetId() int {
@@ -80,14 +80,20 @@ func (client *Client) GetPassword() string {
 
 func (client *Client) readPump() {
 	defer func() {
+		close(client.sendChan)
 		client.hub.unregister <- client
-		close(client.send)
 		client.conn.Close()
 	}()
 
 	client.conn.SetReadLimit(maxMessageSize)
 	client.conn.SetReadDeadline(time.Now().Add(pongWait))
 	client.conn.SetPongHandler(func(string) error { client.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+
+	client.conn.SetCloseHandler(func(code int, text string) error {
+		message := websocket.FormatCloseMessage(code, "Goodbye! Connection closing.")
+		client.conn.WriteControl(websocket.CloseMessage, message, time.Now().Add(writeWait))
+		return nil
+	})
 
 	for {
 		_, message, err := client.conn.ReadMessage()
@@ -98,6 +104,7 @@ func (client *Client) readPump() {
 				websocket.CloseNormalClosure) {
 				log.Printf("error: %v", err)
 			}
+			log.Printf("Client %s (%s) disconnected", client.Name, client.Xid)
 			break
 		}
 		client.hub.pubsub.conn.Publish(context.Background(), "lobby", message)
@@ -113,7 +120,7 @@ func (client *Client) writePump() {
 
 	for {
 		select {
-		case msg, ok := <-client.send:
+		case msg, ok := <-client.sendChan:
 			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
@@ -128,9 +135,8 @@ func (client *Client) writePump() {
 
 			w.Write(msg)
 
-			n := len(client.send)
-			for i := 0; i < n; i++ {
-				w.Write(<-client.send)
+			for range len(client.sendChan) {
+				w.Write(<-client.sendChan)
 			}
 
 			if err := w.Close(); err != nil {

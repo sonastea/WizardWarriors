@@ -6,11 +6,13 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/sonastea/WizardWarriors/pkg/config"
 	db "github.com/sonastea/WizardWarriors/pkg/database"
-	"github.com/sonastea/WizardWarriors/pkg/hub"
+	"github.com/sonastea/WizardWarriors/pkg/handler"
+	"github.com/sonastea/WizardWarriors/pkg/repository"
 	"github.com/sonastea/WizardWarriors/pkg/server"
-	"github.com/sonastea/WizardWarriors/pkg/store"
+	"github.com/sonastea/WizardWarriors/pkg/service"
 )
 
 func main() {
@@ -24,21 +26,26 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	// redis := redis.NewClient(cfg.RedisOpts)
+
 	pool := db.NewConnPool(ctx, cfg.DBConnURI)
 
-	stores := hub.Stores{}
-	stores.UserStore = store.NewUserStore(pool)
+	userRepo := repository.NewPostgresUserRepository(pool)
+	gameRepo := repository.NewPostgresGameRepository(pool)
 
-	hub, err := hub.New(cfg, stores, nil)
+	apiService := service.NewApiService(userRepo, gameRepo)
+
+	apiHandler := handler.NewApiHandler(apiService)
+
+	redisClient := redis.NewClient(cfg.RedisOpts)
+
+	apiSrv, err := server.NewServer(
+		cfg,
+		server.WithRedis(redisClient),
+		server.WithApiHandler(apiHandler),
+	)
 	if err != nil {
-		panic(err)
+		log.Fatalln("Unable to create server:", err)
 	}
 
-	server, err := server.NewServer(cfg, hub, stores.UserStore)
-	if err != nil {
-		log.Fatalln("Unable to create server")
-	}
-
-	server.Start(hub)
+	apiSrv.Start()
 }

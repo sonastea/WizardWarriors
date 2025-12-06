@@ -25,7 +25,7 @@ type Config struct {
 func (c *Config) Load(args []string) error {
 	fs := flag.NewFlagSet("ww", flag.ContinueOnError)
 
-	fs.StringVar(&c.Addr, "ADDR", ":8080", "database connection uri")
+	fs.StringVar(&c.Addr, "ADDR", ":8080", "binding server address")
 	fs.BoolVar(&c.Debug, "debug", false, "enable debug mode for detailed logging")
 	fs.StringVar(&c.DBConnURI, "DATABASE_URL", "postgresql://postgres:postgres@db/wizardwarriors", "database connection uri")
 	fs.StringVar(&c.RedisURL, "REDIS_URL", "redis://localhost:6379/0", "redis url")

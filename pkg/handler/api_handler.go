@@ -1,0 +1,281 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/sonastea/WizardWarriors/pkg/entity"
+	"github.com/sonastea/WizardWarriors/pkg/service"
+)
+
+type ApiHandler struct {
+	apiService service.ApiService
+}
+
+func NewApiHandler(apiService service.ApiService) *ApiHandler {
+	return &ApiHandler{
+		apiService: apiService,
+	}
+}
+
+type APIResponse struct {
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+type UserCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type PlayerSaveRequest struct {
+	GameID int `json:"game_id"`
+}
+
+func errorResponse(err string) APIResponse {
+	return APIResponse{
+		Success: false,
+		Error:   err,
+	}
+}
+
+func successResponse(data any) APIResponse {
+	return APIResponse{
+		Success: true,
+		Data:    data,
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, response APIResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(response)
+}
+
+func getDomain(r *http.Request) string {
+	if isProduction() {
+		return ".wizardwarriors.com"
+	}
+	host := r.Host
+	if strings.Contains(host, ".ww.local") || strings.Contains(host, "ww.local") {
+		return ".ww.local"
+	}
+	return ""
+}
+
+func getSameSite() http.SameSite {
+	if isProduction() {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
+func isProduction() bool {
+	return os.Getenv("ENV") == "production"
+}
+
+func (h *ApiHandler) setUserCookie(w http.ResponseWriter, r *http.Request, userID int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "ww-userId",
+		Value:    fmt.Sprintf("%d", userID),
+		Path:     "/",
+		Domain:   getDomain(r),
+		Secure:   isProduction(),
+		HttpOnly: false,
+		SameSite: getSameSite(),
+		MaxAge:   86400 * 7, // 7 days
+	})
+}
+
+// Register handles user registration
+func (h *ApiHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error reading request body"))
+		return
+	}
+	defer r.Body.Close()
+
+	var credentials UserCredentials
+	if err := json.Unmarshal(body, &credentials); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid JSON format"))
+		return
+	}
+
+	// Call service layer
+	userID, err := h.apiService.Register(r.Context(), credentials.Username, credentials.Password)
+	if err != nil {
+		log.Printf("Registration error: %v", err)
+		if strings.Contains(err.Error(), "already exists") {
+			writeJSON(w, http.StatusConflict, errorResponse(err.Error()))
+		} else if strings.Contains(err.Error(), "cannot be empty") || strings.Contains(err.Error(), "must be at least") {
+			writeJSON(w, http.StatusBadRequest, errorResponse(err.Error()))
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to create user"))
+		}
+		return
+	}
+
+	// Set cookie
+	h.setUserCookie(w, r, userID)
+
+	// Return response
+	writeJSON(w, http.StatusCreated, successResponse(map[string]int{"id": userID}))
+}
+
+// Login handles user authentication
+func (h *ApiHandler) Login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error reading request body"))
+		return
+	}
+	defer r.Body.Close()
+
+	var credentials UserCredentials
+	if err := json.Unmarshal(body, &credentials); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid JSON format"))
+		return
+	}
+
+	// Call service layer
+	userID, err := h.apiService.Login(r.Context(), credentials.Username, credentials.Password)
+	if err != nil {
+		log.Printf("Login error: %v", err)
+		writeJSON(w, http.StatusUnauthorized, errorResponse("Invalid username or password"))
+		return
+	}
+
+	// Get player saves
+	saves, err := h.apiService.GetPlayerSaves(r.Context(), userID)
+	if err != nil {
+		log.Printf("Error getting player saves: %v", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to get player saves"))
+		return
+	}
+
+	// Set cookie
+	h.setUserCookie(w, r, userID)
+
+	// Return response
+	writeJSON(w, http.StatusOK, successResponse(saves))
+}
+
+// GetPlayerSave handles retrieving a player save by game ID
+func (h *ApiHandler) GetPlayerSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid request"))
+		return
+	}
+	defer r.Body.Close()
+
+	var req PlayerSaveRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid JSON format"))
+		return
+	}
+
+	// Call service layer
+	save, err := h.apiService.GetPlayerSave(r.Context(), req.GameID)
+	if err != nil {
+		log.Printf("Error getting player save: %v", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successResponse(save))
+}
+
+// SaveGame handles saving or updating a game
+func (h *ApiHandler) SaveGame(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid request"))
+		return
+	}
+	defer r.Body.Close()
+
+	var gameStats entity.GameStats
+	if err := json.Unmarshal(body, &gameStats); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid JSON format"))
+		return
+	}
+
+	// Get user ID from cookie
+	cookie, err := r.Cookie("ww-userId")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			writeJSON(w, http.StatusUnauthorized, errorResponse("Not authenticated"))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error retrieving authentication"))
+		return
+	}
+
+	userID, err := strconv.Atoi(cookie.Value)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid authentication cookie"))
+		return
+	}
+
+	// Call service layer
+	saved, err := h.apiService.SaveGame(r.Context(), userID, &gameStats)
+	if err != nil {
+		log.Printf("Error saving game: %v", err)
+		if strings.Contains(err.Error(), "unauthorized") {
+			writeJSON(w, http.StatusForbidden, errorResponse("You are not authorized to save this game"))
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to save game"))
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successResponse(saved))
+}
+
+// GetLeaderboard handles retrieving the leaderboard
+func (h *ApiHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	// Call service layer
+	leaderboard, err := h.apiService.GetLeaderboard(context.Background())
+	if err != nil {
+		log.Printf("Error getting leaderboard: %v", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to get leaderboard"))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successResponse(leaderboard))
+}

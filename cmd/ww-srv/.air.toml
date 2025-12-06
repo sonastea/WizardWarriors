@@ -3,16 +3,15 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["--DATABASE_URL=$DATABASE_URL", "--REDIS_URL=$REDIS_URL"]
-  bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main ./cmd/ww-srv"
+  args_bin = ["--DATABASE_URL=${DATABASE_URL}", "--REDIS_URL=${REDIS_URL}"]
+  bin = "./tmp/ww-srv"
+  cmd = "go build -o ./tmp/ww-srv ./cmd/ww-srv"
   delay = 100
   exclude_dir = ["assets", "tmp", "vendor", "testdata", "Game", "migrations", "docker", "ww-ui"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
   follow_symlink = false
-  full_bin = ""
   include_dir = []
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []

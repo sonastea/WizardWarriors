@@ -20,11 +20,11 @@ type Hub struct {
 	pubsub *PubSub
 }
 
-func New(cfg *config.Config, stores Stores, pool *redis.Client) (*Hub, error) {
-	// pubsub, err := NewPubSub(cfg, stores, pool)
-	// if err != nil {
-	// 	return nil, err
-	// }
+func New(cfg *config.Config, stores *Stores, pool *redis.Client) (*Hub, error) {
+	pubsub, err := NewPubSub(cfg, stores, pool)
+	if err != nil {
+		return nil, err
+	}
 
 	hub := &Hub{
 		register:   make(chan *Client),
@@ -32,7 +32,7 @@ func New(cfg *config.Config, stores Stores, pool *redis.Client) (*Hub, error) {
 
 		clients: make(map[*Client]bool),
 
-		pubsub: nil,
+		pubsub: pubsub,
 	}
 
 	// hub.users = userStore.GetAllUsers()
@@ -41,7 +41,7 @@ func New(cfg *config.Config, stores Stores, pool *redis.Client) (*Hub, error) {
 }
 
 func (hub *Hub) Run(ctx context.Context) {
-	// go hub.ListenPubSub(ctx)
+	go hub.ListenPubSub(ctx)
 
 	for {
 		select {
@@ -70,6 +70,6 @@ func (hub *Hub) removeClient(client *Client) {
 
 func (hub *Hub) broadcastToClients(message []byte) {
 	for client := range hub.clients {
-		client.send <- message
+		client.sendChan <- message
 	}
 }
