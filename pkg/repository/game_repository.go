@@ -2,32 +2,40 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/sonastea/WizardWarriors/pkg/entity"
 )
 
+type GameSessionToken string
+
 // GameRepository defines the interface for game storage operations
 type GameRepository interface {
+	JoinMultiplayer(ctx context.Context, userID string) (GameSessionToken, error)
 	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
 	GetPlayerSavesByUserID(ctx context.Context, userID int) ([]entity.PlayerSave, error)
 	GetLeaderboard(ctx context.Context) ([]entity.GameStats, error)
 	SaveGame(ctx context.Context, gameStats *entity.GameStats) (*entity.GameStats, error)
 }
 
-// PostgresGameRepository implements GameRepository for PostgreSQL
-type PostgresGameRepository struct {
-	pool *pgxpool.Pool
+// gameRepository implements GameRepository with postgresql pooling
+type gameRepository struct {
+	pool  *pgxpool.Pool
+	redis *redis.Client
 }
 
-// NewPostgresGameRepository creates a new PostgreSQL game repository
-func NewPostgresGameRepository(pool *pgxpool.Pool) *PostgresGameRepository {
-	return &PostgresGameRepository{pool: pool}
+// NewGameRepository creates a new PostgreSQL game repository
+func NewGameRepository(pool *pgxpool.Pool, redis *redis.Client) GameRepository {
+	return &gameRepository{pool: pool, redis: redis}
 }
 
 // GetPlayerSave retrieves a player save by game ID
-func (r *PostgresGameRepository) GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error) {
+func (r *gameRepository) GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error) {
 	query := `
 		SELECT DISTINCT ON (ps.id)
 			ps.id,
@@ -80,7 +88,7 @@ func (r *PostgresGameRepository) GetPlayerSave(ctx context.Context, gameID int) 
 }
 
 // GetPlayerSavesByUserID retrieves all player saves for a user
-func (r *PostgresGameRepository) GetPlayerSavesByUserID(ctx context.Context, userID int) ([]entity.PlayerSave, error) {
+func (r *gameRepository) GetPlayerSavesByUserID(ctx context.Context, userID int) ([]entity.PlayerSave, error) {
 	query := `
 		SELECT DISTINCT ON (gs.id, gs.is_game_over)
 			ps.id,
@@ -147,7 +155,7 @@ func (r *PostgresGameRepository) GetPlayerSavesByUserID(ctx context.Context, use
 }
 
 // GetLeaderboard retrieves the top 20 game stats
-func (r *PostgresGameRepository) GetLeaderboard(ctx context.Context) ([]entity.GameStats, error) {
+func (r *gameRepository) GetLeaderboard(ctx context.Context) ([]entity.GameStats, error) {
 	query := `
 		SELECT
 			eGS.id,
@@ -206,7 +214,7 @@ func (r *PostgresGameRepository) GetLeaderboard(ctx context.Context) ([]entity.G
 }
 
 // SaveGame creates or updates a game stats entry and player save
-func (r *PostgresGameRepository) SaveGame(ctx context.Context, gameStats *entity.GameStats) (*entity.GameStats, error) {
+func (r *gameRepository) SaveGame(ctx context.Context, gameStats *entity.GameStats) (*entity.GameStats, error) {
 	gameStatsQuery := `
 		INSERT INTO game_stats (
 			user_id, team_deaths, team_kills, player_level,
@@ -265,7 +273,6 @@ func (r *PostgresGameRepository) SaveGame(ctx context.Context, gameStats *entity
 			&gs.PlayerKills, &gs.PlayerKillsAtLevel, &gs.TotalAllies, &gs.TotalEnemies,
 			&gs.IsGameOver, &gs.CreatedAt, &gs.UpdatedAt,
 		)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to create game stats: %w", err)
 		}
@@ -275,7 +282,6 @@ func (r *PostgresGameRepository) SaveGame(ctx context.Context, gameStats *entity
 		err = tx.QueryRow(ctx, playerSaveQuery,
 			gameStats.UserID, gameStats.PlayerLevel, gameStats.Username,
 		).Scan(&ps.UserID, &ps.MaxLevel, &ps.CreatedAt, &ps.UpdatedAt)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to create player save: %w", err)
 		}
@@ -290,7 +296,6 @@ func (r *PostgresGameRepository) SaveGame(ctx context.Context, gameStats *entity
 			&gs.PlayerKills, &gs.PlayerKillsAtLevel, &gs.TotalAllies, &gs.TotalEnemies,
 			&gs.IsGameOver, &gs.CreatedAt, &gs.UpdatedAt,
 		)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to update game stats: %w", err)
 		}
@@ -300,7 +305,6 @@ func (r *PostgresGameRepository) SaveGame(ctx context.Context, gameStats *entity
 		err = tx.QueryRow(ctx, updatePlayerSaveQuery,
 			gameStats.ID, gameStats.PlayerLevel, gameStats.Username,
 		).Scan(&ps.UserID, &ps.MaxLevel, &ps.CreatedAt, &ps.UpdatedAt)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to update player save: %w", err)
 		}
@@ -312,4 +316,24 @@ func (r *PostgresGameRepository) SaveGame(ctx context.Context, gameStats *entity
 
 	gs.Username = gameStats.Username
 	return &gs, nil
+}
+
+// JoinMultiplayer handles authenticating the user and returns a GameSessionToken
+func (r *gameRepository) JoinMultiplayer(ctx context.Context, userID string) (GameSessionToken, error) {
+	// some function that will be called to do the following
+	// 1. generate and retrieve the token for the user
+	// 2. save to redis cache: userId:token
+	// gen token (len = 32)
+	len := 32
+	b := make([]byte, len)
+	_, err := rand.Read(b)
+	if err != nil {
+		panic(err)
+	}
+	token := hex.EncodeToString(b)
+
+	// save to redis
+	r.redis.SetEx(ctx, "gamesession:"+userID, token, 30*time.Minute)
+
+	return GameSessionToken(token), nil
 }

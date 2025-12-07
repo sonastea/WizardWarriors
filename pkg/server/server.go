@@ -50,13 +50,14 @@ func WithApiHandler(apiHandler *handler.ApiHandler) Option {
 		router := s.server.Handler.(*http.ServeMux)
 		api := http.NewServeMux()
 
-		router.HandleFunc("/healthcheck", healthcheckHandler)
+		router.HandleFunc("GET /healthcheck", healthcheckHandler)
 
-		api.HandleFunc("/leaderboard", apiHandler.GetLeaderboard)
-		api.HandleFunc("/player-save", apiHandler.GetPlayerSave)
-		api.HandleFunc("/save-game", apiHandler.SaveGame)
-		api.HandleFunc("/register", apiHandler.Register)
-		api.HandleFunc("/login", apiHandler.Login)
+		api.HandleFunc("GET /leaderboard", apiHandler.GetLeaderboard)
+		api.HandleFunc("POST /player-save", apiHandler.GetPlayerSave)
+		api.HandleFunc("POST /save-game", apiHandler.SaveGame)
+		api.HandleFunc("POST /register", apiHandler.Register)
+		api.HandleFunc("POST /login", apiHandler.Login)
+		api.HandleFunc("POST /join-multiplayer", apiHandler.JoinMultiplayer)
 
 		router.Handle("/api/", enableCors(http.StripPrefix("/api", api), s.cfg.AllowedOrigins, s.cfg.Debug))
 		return nil

@@ -22,6 +22,8 @@ func main() {
 	cfg.Load(os.Args[1:])
 	cfg.RedisOpts = config.NewRedisOpts(cfg.RedisURL)
 
+	redisClient := redis.NewClient(cfg.RedisOpts)
+
 	_, err := pgxpool.New(context.Background(), cfg.DBConnURI)
 	if err != nil {
 		panic(err)
@@ -29,14 +31,12 @@ func main() {
 
 	pool := db.NewConnPool(ctx, cfg.DBConnURI)
 
-	userRepo := repository.NewPostgresUserRepository(pool)
-	gameRepo := repository.NewPostgresGameRepository(pool)
+	userRepo := repository.NewUserRepository(pool, redisClient)
+	gameRepo := repository.NewGameRepository(pool, redisClient)
 
 	apiService := service.NewApiService(userRepo, gameRepo)
 
 	apiHandler := handler.NewApiHandler(apiService)
-
-	redisClient := redis.NewClient(cfg.RedisOpts)
 
 	apiSrv, err := server.NewServer(
 		cfg,

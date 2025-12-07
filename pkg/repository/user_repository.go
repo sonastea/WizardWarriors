@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/sonastea/WizardWarriors/pkg/entity"
 )
 
@@ -15,18 +16,19 @@ type UserRepository interface {
 	GetByID(ctx context.Context, userID int) (*entity.User, error)
 }
 
-// PostgresUserRepository implements UserRepository for PostgreSQL
-type PostgresUserRepository struct {
-	pool *pgxpool.Pool
+// userRepository implements UserRepository with postgresql pooling
+type userRepository struct {
+	pool  *pgxpool.Pool
+	redis *redis.Client
 }
 
-// NewPostgresUserRepository creates a new PostgreSQL user repository
-func NewPostgresUserRepository(pool *pgxpool.Pool) *PostgresUserRepository {
-	return &PostgresUserRepository{pool: pool}
+// NewUserRepository creates a new PostgreSQL user repository
+func NewUserRepository(pool *pgxpool.Pool, redis *redis.Client) UserRepository {
+	return &userRepository{pool: pool, redis: redis}
 }
 
 // Create adds a new user and returns the user id
-func (r *PostgresUserRepository) Create(ctx context.Context, username, password string) (int, error) {
+func (r *userRepository) Create(ctx context.Context, username, password string) (int, error) {
 	query := `
 		INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id;
 	`
@@ -40,8 +42,31 @@ func (r *PostgresUserRepository) Create(ctx context.Context, username, password 
 	return userID, nil
 }
 
+// GetPlayerByID retrieves a user by their user id (not uuid)
+func (r *userRepository) GetPlayerByID(ctx context.Context, userID int) (*entity.User, error) {
+	query := `
+		SELECT id, username, created_at, updated_at, is_active
+		FROM users
+		WHERE id = $1
+	`
+
+	var user entity.User
+	err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&user.ID,
+		&user.Username,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.IsActive,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by their id: %w", err)
+	}
+
+	return &user, nil
+}
+
 // GetByCredentials retrieves a user by username and password
-func (r *PostgresUserRepository) GetByCredentials(ctx context.Context, username, password string) (*entity.User, error) {
+func (r *userRepository) GetByCredentials(ctx context.Context, username, password string) (*entity.User, error) {
 	query := `
 		SELECT id, username, password, created_at, updated_at, is_active
 		FROM users
@@ -65,7 +90,7 @@ func (r *PostgresUserRepository) GetByCredentials(ctx context.Context, username,
 }
 
 // GetByID retrieves a user by ID
-func (r *PostgresUserRepository) GetByID(ctx context.Context, userID int) (*entity.User, error) {
+func (r *userRepository) GetByID(ctx context.Context, userID int) (*entity.User, error) {
 	query := `
 		SELECT id, username, password, created_at, updated_at, is_active
 		FROM users

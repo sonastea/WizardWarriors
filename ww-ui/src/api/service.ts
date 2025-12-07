@@ -3,6 +3,7 @@ import {
   GameStats,
   GameStatsResponse,
   GetPlayerSaveApiResponse,
+  JoinMultiplayerApiResponse,
   PlayerSaveApiResponse,
   SavePlayerSaveApiResponse,
   UserCredentials,
@@ -125,6 +126,28 @@ class ApiService {
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to save.");
+      }
+
+      return result;
+    } catch (error: unknown) {
+      return this.handleError(error);
+    }
+  }
+
+  async joinMultiplayer(): Promise<JoinMultiplayerApiResponse> {
+    try {
+      const response = await fetch(this.baseUrl + "/api/join-multiplayer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      const result: JoinMultiplayerApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error);
       }
 
       return result;

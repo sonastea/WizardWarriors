@@ -63,6 +63,10 @@ export interface PlayerSaveResponse extends PlayerSaveGameDetails {
   updated_at: string;
 }
 
+export interface JoinMultiplayerResponse {
+  token: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -72,3 +76,4 @@ export interface ApiResponse<T> {
 export type GetPlayerSaveApiResponse = ApiResponse<PlayerSaveResponse>;
 export type SavePlayerSaveApiResponse = GetPlayerSaveApiResponse;
 export type PlayerSaveApiResponse = ApiResponse<PlayerSaveResponse[]>;
+export type JoinMultiplayerApiResponse = ApiResponse<JoinMultiplayerResponse>;

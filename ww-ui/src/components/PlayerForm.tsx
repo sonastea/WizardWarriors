@@ -1,9 +1,11 @@
 import useApiService from "@hooks/useApiService";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAtom } from "jotai";
-import React, { Dispatch, SetStateAction, useState } from "react";
+import React, { Dispatch, SetStateAction, useState, useEffect } from "react";
 import { gameStatsAtom, setGameSaved } from "src/state";
 import { PlayerSaveResponse } from "src/types/index.types";
 import styles from "./PlayerForm.module.css";
+import { useSocket } from "@contexts/Socket";
 
 export const getCookie = (name: string): string => {
   const cookies = document.cookie.split("; ");
@@ -16,8 +18,10 @@ export const getCookie = (name: string): string => {
 
 const PlayerForm = ({
   setPlayable,
+  onMultiplayerJoin,
 }: {
   setPlayable: Dispatch<SetStateAction<boolean | undefined>>;
+  onMultiplayerJoin: () => void;
 }) => {
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -33,9 +37,12 @@ const PlayerForm = ({
   const apiService = useApiService();
   const [_gameStats, setGameStats] = useAtom(gameStatsAtom);
 
-  const login = async (e: React.MouseEvent) => {
-    deleteCookie(e, "ww-userId");
-    await apiService?.loginUser({ username, password }).then((res) => {
+  const loginMutation = useMutation({
+    mutationFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.loginUser({ username, password });
+    },
+    onSuccess: (res) => {
       if (res.success) {
         if (!res.data) handlePlayGame();
         setSaves(res.data);
@@ -47,12 +54,18 @@ const PlayerForm = ({
       } else {
         setError(res.error || "Error logging in.");
       }
-    });
-  };
+    },
+    onError: () => {
+      setError("Error logging in.");
+    },
+  });
 
-  const register = async (e: React.MouseEvent) => {
-    deleteCookie(e, "ww-userId");
-    await apiService?.registerUser({ username, password }).then((res) => {
+  const registerMutation = useMutation({
+    mutationFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.registerUser({ username, password });
+    },
+    onSuccess: (res) => {
       if (res.success) {
         setPlayable(true);
         setGameStats((prev) => ({
@@ -63,7 +76,54 @@ const PlayerForm = ({
       } else {
         setError(res.error || "Error registering.");
       }
-    });
+    },
+    onError: () => {
+      setError("Error registering.");
+    },
+  });
+
+  const joinMultiplayerQuery = useQuery({
+    queryKey: ["multiplayer"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.joinMultiplayer();
+    },
+    enabled: false,
+  });
+
+  useEffect(() => {
+    const handleMultiplayerJoin = async () => {
+      if (
+        joinMultiplayerQuery.isSuccess &&
+        joinMultiplayerQuery.data?.data?.token
+      ) {
+        const token = joinMultiplayerQuery.data.data.token;
+
+        try {
+          sessionStorage.setItem("token", token);
+          onMultiplayerJoin();
+        } catch (err) {
+          console.error("Failed to connect to multiplayer:", err);
+          setError("Failed to connect to multiplayer server");
+        }
+      }
+    };
+
+    handleMultiplayerJoin();
+  }, [
+    joinMultiplayerQuery.isSuccess,
+    joinMultiplayerQuery.data,
+    onMultiplayerJoin,
+  ]);
+
+  const login = async (e: React.MouseEvent) => {
+    deleteCookie(e, "ww-userId");
+    loginMutation.mutate();
+  };
+
+  const register = async (e: React.MouseEvent) => {
+    deleteCookie(e, "ww-userId");
+    registerMutation.mutate();
   };
 
   const deleteCookie = (event: React.UIEvent, name: string) => {
@@ -80,30 +140,46 @@ const PlayerForm = ({
     setGameSaved(false);
   };
 
-  const handlePlayGame = async () => {
-    if (selectedSave) {
-      const save = await apiService?.getPlayerSave(selectedSave.game_id);
+  const loadSaveMutation = useMutation({
+    mutationFn: async (gameId: number) => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.getPlayerSave(gameId);
+    },
+    onSuccess: (save) => {
       if (save?.data?.is_game_over || !save?.data?.game_is_active) {
         alert("This save is no longer playable.");
         return;
       }
-      setGameStats({
-        game_id: save.data.game_id,
-        username,
-        user_id: save.data.user_id,
-        team_deaths: save.data.team_deaths,
-        team_kills: save.data.team_kills,
-        player_level: save.data.player_level,
-        player_kills: save.data.player_kills,
-        player_kills_at_level: save.data.player_kills_at_level,
-        total_allies: save.data.total_allies,
-        total_enemies: save.data.total_enemies,
-        is_game_over: save.data.is_game_over,
-        game_created_at: save.data.game_created_at,
-        game_updated_at: save.data.game_updated_at,
-      });
+      if (save.data) {
+        setGameStats({
+          game_id: save.data.game_id,
+          username,
+          user_id: save.data.user_id,
+          team_deaths: save.data.team_deaths,
+          team_kills: save.data.team_kills,
+          player_level: save.data.player_level,
+          player_kills: save.data.player_kills,
+          player_kills_at_level: save.data.player_kills_at_level,
+          total_allies: save.data.total_allies,
+          total_enemies: save.data.total_enemies,
+          is_game_over: save.data.is_game_over,
+          game_created_at: save.data.game_created_at,
+          game_updated_at: save.data.game_updated_at,
+        });
+      }
+      playGame();
+    },
+    onError: () => {
+      alert("Error loading save.");
+    },
+  });
+
+  const handlePlayGame = async () => {
+    if (selectedSave) {
+      loadSaveMutation.mutate(selectedSave.game_id);
+    } else {
+      playGame();
     }
-    playGame();
   };
 
   if (saves) {
@@ -166,11 +242,31 @@ const PlayerForm = ({
           <button
             className={`${styles.button} ${styles.grayButton}`}
             onClick={() => setSaves(undefined)}
+            disabled={loadSaveMutation.isPending}
           >
             Back
           </button>
-          <button className={styles.button} onClick={() => handlePlayGame()}>
-            {selectedSave ? "Continue" : "Start New Game"}
+          <button
+            className={styles.button}
+            onClick={() => handlePlayGame()}
+            disabled={loadSaveMutation.isPending}
+          >
+            {loadSaveMutation.isPending
+              ? "Loading..."
+              : selectedSave
+                ? "Continue"
+                : "Start New Game"}
+          </button>
+        </div>
+        <div className={styles.buttonContainer}>
+          <button
+            className={`${styles.button} ${styles.buttonMultiplayer}`}
+            onClick={() => joinMultiplayerQuery.refetch()}
+            disabled={joinMultiplayerQuery.isFetching}
+          >
+            {joinMultiplayerQuery.isFetching
+              ? "Connecting..."
+              : "Play Multiplayer"}
           </button>
         </div>
       </div>
@@ -209,18 +305,18 @@ const PlayerForm = ({
         <button
           className={styles.button}
           aria-label="Login"
-          disabled={disableButton}
+          disabled={disableButton || loginMutation.isPending}
           onClick={login}
         >
-          Login
+          {loginMutation.isPending ? "Logging in..." : "Login"}
         </button>
         <button
           className={`${styles.button} ${styles.grayButton}`}
           aria-label="Register"
-          disabled={disableButton}
+          disabled={disableButton || registerMutation.isPending}
           onClick={register}
         >
-          Register
+          {registerMutation.isPending ? "Registering..." : "Register"}
         </button>
       </div>
     </form>

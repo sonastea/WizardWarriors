@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/sonastea/WizardWarriors/pkg/entity"
@@ -13,6 +14,7 @@ import (
 type ApiService interface {
 	Register(ctx context.Context, username, password string) (int, error)
 	Login(ctx context.Context, username, password string) (int, error)
+	JoinMultiplayer(ctx context.Context, userID int) (*map[string]repository.GameSessionToken, error)
 	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
 	GetPlayerSaves(ctx context.Context, userID int) ([]entity.PlayerSave, error)
 	GetLeaderboard(ctx context.Context) ([]entity.GameStats, error)
@@ -141,4 +143,21 @@ func (s *apiService) SaveGame(ctx context.Context, userID int, gameStats *entity
 	}
 
 	return saved, nil
+}
+
+func (s *apiService) JoinMultiplayer(ctx context.Context, userID int) (*map[string]repository.GameSessionToken, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user")
+	}
+
+	token, err := s.gameRepo.JoinMultiplayer(ctx, strconv.FormatUint(uint64(user.ID), 10))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect user to multiplayer")
+	}
+
+	data := make(map[string]repository.GameSessionToken)
+	data["token"] = token
+
+	return &data, nil
 }

@@ -63,7 +63,6 @@ func (hub *Hub) addClient(client *Client) {
 func (hub *Hub) removeClient(client *Client) {
 	if _, ok := hub.clients[client]; ok {
 		delete(hub.clients, client)
-		// hub.userStore.RemoveUser(client)
 		fmt.Println("Remaining size of connection pool: ", len(hub.clients))
 	}
 }

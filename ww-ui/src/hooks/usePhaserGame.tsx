@@ -12,11 +12,15 @@ const usePhaserGame = (
       const newGame = new Game({ ...config, parent: containerRef.current });
       setGame(newGame);
     }
-
-    return () => {
-      game?.destroy(true);
-    };
   }, [config, containerRef, game]);
+
+  useEffect(() => {
+    return () => {
+      if (game) {
+        game.destroy(true);
+      }
+    };
+  }, [game]);
 
   return game;
 };

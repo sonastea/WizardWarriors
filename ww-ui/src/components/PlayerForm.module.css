@@ -10,8 +10,8 @@
 
 .button {
   flex: 1 1 auto;
-  min-width: 120px;
-  max-width: 300px;
+  width: 120px;
+  max-width: auto;
   margin: 0.25rem;
   background-color: #3b82f6;
   border: 1px solid #2563eb;
@@ -27,6 +27,12 @@
   cursor: pointer;
   user-select: none;
   transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+}
+
+.buttonMultiplayer {
+  background-color: #5d3fd3;
+  border: 1px solid #4d3fd3;
 }
 
 .button:disabled,
@@ -52,6 +58,16 @@
 .button:active {
   background-color: #1f2937;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.buttonMultiplayer:hover {
+  background-color: #341ab3;
+  border: 1px solid #341ab3;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.buttonMultiplayer:focus {
+  outline: 2px solid #4d3fd3;
 }
 
 .grayButton {

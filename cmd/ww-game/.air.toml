@@ -6,7 +6,7 @@ tmp_dir = "tmp"
   entrypoint = ["./tmp/ww-game", "-ADDR=:8085"]
   cmd = "go build -o ./tmp/ww-game ./cmd/ww-game"
   delay = 100
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "Game", "migrations", "docker", "ww-ui"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "Game", "migrations", "docker", "ww-ui", "node_modules"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false

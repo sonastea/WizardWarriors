@@ -115,7 +115,6 @@ func (h *ApiHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call service layer
 	userID, err := h.apiService.Register(r.Context(), credentials.Username, credentials.Password)
 	if err != nil {
 		log.Printf("Registration error: %v", err)
@@ -129,10 +128,8 @@ func (h *ApiHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set cookie
 	h.setUserCookie(w, r, userID)
 
-	// Return response
 	writeJSON(w, http.StatusCreated, successResponse(map[string]int{"id": userID}))
 }
 
@@ -156,7 +153,6 @@ func (h *ApiHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call service layer
 	userID, err := h.apiService.Login(r.Context(), credentials.Username, credentials.Password)
 	if err != nil {
 		log.Printf("Login error: %v", err)
@@ -164,7 +160,6 @@ func (h *ApiHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get player saves
 	saves, err := h.apiService.GetPlayerSaves(r.Context(), userID)
 	if err != nil {
 		log.Printf("Error getting player saves: %v", err)
@@ -172,10 +167,8 @@ func (h *ApiHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set cookie
 	h.setUserCookie(w, r, userID)
 
-	// Return response
 	writeJSON(w, http.StatusOK, successResponse(saves))
 }
 
@@ -199,7 +192,6 @@ func (h *ApiHandler) GetPlayerSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call service layer
 	save, err := h.apiService.GetPlayerSave(r.Context(), req.GameID)
 	if err != nil {
 		log.Printf("Error getting player save: %v", err)
@@ -230,7 +222,6 @@ func (h *ApiHandler) SaveGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from cookie
 	cookie, err := r.Cookie("ww-userId")
 	if err != nil {
 		if err == http.ErrNoCookie {
@@ -247,7 +238,6 @@ func (h *ApiHandler) SaveGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call service layer
 	saved, err := h.apiService.SaveGame(r.Context(), userID, &gameStats)
 	if err != nil {
 		log.Printf("Error saving game: %v", err)
@@ -269,7 +259,6 @@ func (h *ApiHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call service layer
 	leaderboard, err := h.apiService.GetLeaderboard(context.Background())
 	if err != nil {
 		log.Printf("Error getting leaderboard: %v", err)
@@ -278,4 +267,28 @@ func (h *ApiHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, successResponse(leaderboard))
+}
+
+// JoinMultiplayer handles authenticate the user before redirecting them to the game server
+func (h *ApiHandler) JoinMultiplayer(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("ww-userId")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			writeJSON(w, http.StatusUnauthorized, errorResponse("Not authenticated"))
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error retrieving authentication"))
+	}
+
+	userID, err := strconv.Atoi(cookie.Value)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error processing your request."))
+	}
+
+	token, err := h.apiService.JoinMultiplayer(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, errorResponse("Please log back in and try again."))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successResponse(token))
 }

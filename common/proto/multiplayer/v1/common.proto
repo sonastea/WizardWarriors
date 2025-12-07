@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package multiplayer.v1;
+
+// A generic identifier type
+message ID {
+  string value = 1;
+}
+
+// A coordinate for player position
+message Vector2 {
+  float x = 1;
+  float y = 2;
+}

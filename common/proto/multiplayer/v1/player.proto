@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package multiplayer.v1;
+
+import "multiplayer/v1/common.proto";
+
+// Types of player-related events
+enum PlayerEventType {
+  PLAYER_EVENT_TYPE_UNSPECIFIED = 0;
+  PLAYER_EVENT_TYPE_JOIN        = 1;
+  PLAYER_EVENT_TYPE_LEAVE       = 2;
+  PLAYER_EVENT_TYPE_MOVE        = 3;
+  PLAYER_EVENT_TYPE_READ        = 4; // e.g., "ack" a chat message
+  PLAYER_EVENT_TYPE_READY       = 5; // Player is ready to start
+}
+
+message PlayerEvent {
+  PlayerEventType type = 1;
+
+  // The player this refers to
+  ID player_id = 2;
+
+  // Optional payload depending on event
+  Vector2 position = 3; // Only used for MOVE
+}

@@ -8,6 +8,7 @@ require (
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/redis/go-redis/v9 v9.17.2
 	github.com/rs/cors v1.11.1
+	google.golang.org/protobuf v1.36.10
 )
 
 require (

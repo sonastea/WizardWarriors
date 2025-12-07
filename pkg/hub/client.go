@@ -107,7 +107,7 @@ func (client *Client) readPump() {
 			log.Printf("Client %s (%s) disconnected", client.Name, client.Xid)
 			break
 		}
-		client.hub.pubsub.conn.Publish(context.Background(), "lobby", message)
+		client.hub.pubsub.conn.Publish(context.Background(), "chat.lobby", message)
 	}
 }
 
