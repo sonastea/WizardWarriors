@@ -67,6 +67,11 @@ export interface JoinMultiplayerResponse {
   token: string;
 }
 
+export interface UserInfo {
+  id: number;
+  username: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -77,3 +82,4 @@ export type GetPlayerSaveApiResponse = ApiResponse<PlayerSaveResponse>;
 export type SavePlayerSaveApiResponse = GetPlayerSaveApiResponse;
 export type PlayerSaveApiResponse = ApiResponse<PlayerSaveResponse[]>;
 export type JoinMultiplayerApiResponse = ApiResponse<JoinMultiplayerResponse>;
+export type ValidateSessionApiResponse = ApiResponse<UserInfo>;

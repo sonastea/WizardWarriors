@@ -10,10 +10,17 @@ import (
 	"github.com/sonastea/WizardWarriors/pkg/repository"
 )
 
+// UserInfo represents basic user information for session validation
+type UserInfo struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+}
+
 // ApiService defines the interface for API business logic (users and games)
 type ApiService interface {
 	Register(ctx context.Context, username, password string) (int, error)
 	Login(ctx context.Context, username, password string) (int, error)
+	ValidateSession(ctx context.Context, userID int) (*UserInfo, error)
 	JoinMultiplayer(ctx context.Context, userID int) (*map[string]repository.GameSessionToken, error)
 	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
 	GetPlayerSaves(ctx context.Context, userID int) ([]entity.PlayerSave, error)
@@ -143,6 +150,27 @@ func (s *apiService) SaveGame(ctx context.Context, userID int, gameStats *entity
 	}
 
 	return saved, nil
+}
+
+// ValidateSession validates a user session and returns user info
+func (s *apiService) ValidateSession(ctx context.Context, userID int) (*UserInfo, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID")
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid session: user not found")
+	}
+
+	if !user.IsActive {
+		return nil, fmt.Errorf("user account is inactive")
+	}
+
+	return &UserInfo{
+		ID:       user.ID,
+		Username: user.Username,
+	}, nil
 }
 
 func (s *apiService) JoinMultiplayer(ctx context.Context, userID int) (*map[string]repository.GameSessionToken, error) {

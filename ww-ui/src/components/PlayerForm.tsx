@@ -91,6 +91,16 @@ const PlayerForm = ({
     enabled: false,
   });
 
+  const sessionValidationQuery = useQuery({
+    queryKey: ["session"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.validateSession();
+    },
+    enabled: !!apiService,
+    retry: false,
+  });
+
   useEffect(() => {
     const handleMultiplayerJoin = async () => {
       if (
@@ -116,19 +126,51 @@ const PlayerForm = ({
     onMultiplayerJoin,
   ]);
 
+  const playerSavesQuery = useQuery({
+    queryKey: ["playerSaves"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.getPlayerSaves();
+    },
+    enabled: false,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (sessionValidationQuery.isSuccess && sessionValidationQuery.data?.success) {
+      const userInfo = sessionValidationQuery.data.data;
+      if (userInfo) {
+        setUsername(userInfo.username);
+        setGameStats((prev) => ({
+          ...prev,
+          user_id: userInfo.id,
+          username: userInfo.username,
+        }));
+        playerSavesQuery.refetch();
+      }
+    }
+  }, [sessionValidationQuery.isSuccess, sessionValidationQuery.data]);
+
+  useEffect(() => {
+    if (playerSavesQuery.isSuccess && playerSavesQuery.data?.success) {
+      const savesData = playerSavesQuery.data.data;
+      
+      if (!savesData || savesData.length === 0) {
+        handlePlayGame();
+      } else {
+        setSaves(savesData);
+      }
+    }
+  }, [playerSavesQuery.isSuccess, playerSavesQuery.data]);
+
   const login = async (e: React.MouseEvent) => {
-    deleteCookie(e, "ww-userId");
+    e.preventDefault();
     loginMutation.mutate();
   };
 
   const register = async (e: React.MouseEvent) => {
-    deleteCookie(e, "ww-userId");
+    e.preventDefault();
     registerMutation.mutate();
-  };
-
-  const deleteCookie = (event: React.UIEvent, name: string) => {
-    event.preventDefault();
-    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
   };
 
   const handleSaveSelection = (save: PlayerSaveResponse) => {
@@ -171,6 +213,27 @@ const PlayerForm = ({
     },
     onError: () => {
       alert("Error loading save.");
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.logout();
+    },
+    onSuccess: () => {
+      setSaves(undefined);
+      setUsername("");
+      setPassword("");
+      setSelectedSave(null);
+      setGameStats((prev) => ({
+        ...prev,
+        user_id: -1,
+        username: "",
+      }));
+    },
+    onError: () => {
+      setError("Error logging out.");
     },
   });
 
@@ -241,15 +304,15 @@ const PlayerForm = ({
         <div className={styles.buttonContainer}>
           <button
             className={`${styles.button} ${styles.grayButton}`}
-            onClick={() => setSaves(undefined)}
-            disabled={loadSaveMutation.isPending}
+            onClick={() => logoutMutation.mutate()}
+            disabled={loadSaveMutation.isPending || logoutMutation.isPending}
           >
-            Back
+            {logoutMutation.isPending ? "Logging out..." : "Logout"}
           </button>
           <button
             className={styles.button}
             onClick={() => handlePlayGame()}
-            disabled={loadSaveMutation.isPending}
+            disabled={loadSaveMutation.isPending || logoutMutation.isPending}
           >
             {loadSaveMutation.isPending
               ? "Loading..."

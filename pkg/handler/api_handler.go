@@ -16,12 +16,14 @@ import (
 )
 
 type ApiHandler struct {
-	apiService service.ApiService
+	apiService    service.ApiService
+	sessionMaxAge int
 }
 
-func NewApiHandler(apiService service.ApiService) *ApiHandler {
+func NewApiHandler(apiService service.ApiService, sessionMaxAge int) *ApiHandler {
 	return &ApiHandler{
-		apiService: apiService,
+		apiService:    apiService,
+		sessionMaxAge: sessionMaxAge,
 	}
 }
 
@@ -91,7 +93,7 @@ func (h *ApiHandler) setUserCookie(w http.ResponseWriter, r *http.Request, userI
 		Secure:   isProduction(),
 		HttpOnly: false,
 		SameSite: getSameSite(),
-		MaxAge:   86400 * 7, // 7 days
+		MaxAge:   h.sessionMaxAge,
 	})
 }
 
@@ -168,6 +170,39 @@ func (h *ApiHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setUserCookie(w, r, userID)
+
+	writeJSON(w, http.StatusOK, successResponse(saves))
+}
+
+// GetPlayerSaves handles retrieving all player saves for the authenticated user
+func (h *ApiHandler) GetPlayerSaves(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	cookie, err := r.Cookie("ww-userId")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			writeJSON(w, http.StatusUnauthorized, errorResponse("Not authenticated"))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error retrieving authentication"))
+		return
+	}
+
+	userID, err := strconv.Atoi(cookie.Value)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid authentication cookie"))
+		return
+	}
+
+	saves, err := h.apiService.GetPlayerSaves(r.Context(), userID)
+	if err != nil {
+		log.Printf("Error getting player saves: %v", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to get player saves"))
+		return
+	}
 
 	writeJSON(w, http.StatusOK, successResponse(saves))
 }
@@ -291,4 +326,58 @@ func (h *ApiHandler) JoinMultiplayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, successResponse(token))
+}
+
+// ValidateSession checks if the current session is valid and returns user info
+func (h *ApiHandler) ValidateSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	cookie, err := r.Cookie("ww-userId")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			writeJSON(w, http.StatusUnauthorized, errorResponse("Not authenticated"))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Error retrieving authentication"))
+		return
+	}
+
+	userID, err := strconv.Atoi(cookie.Value)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid authentication cookie"))
+		return
+	}
+
+	userInfo, err := h.apiService.ValidateSession(r.Context(), userID)
+	if err != nil {
+		log.Printf("Session validation error: %v", err)
+		writeJSON(w, http.StatusUnauthorized, errorResponse("Session invalid"))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successResponse(userInfo))
+}
+
+// Logout handles user logout
+func (h *ApiHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse("Method not allowed"))
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "ww-userId",
+		Value:    "",
+		Path:     "/",
+		Domain:   getDomain(r),
+		Secure:   isProduction(),
+		HttpOnly: false,
+		SameSite: getSameSite(),
+		MaxAge:   -1,
+	})
+
+	writeJSON(w, http.StatusOK, successResponse(map[string]string{"message": "Logged out successfully"}))
 }

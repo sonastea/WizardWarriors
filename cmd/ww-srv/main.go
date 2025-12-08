@@ -36,7 +36,7 @@ func main() {
 
 	apiService := service.NewApiService(userRepo, gameRepo)
 
-	apiHandler := handler.NewApiHandler(apiService)
+	apiHandler := handler.NewApiHandler(apiService, cfg.SessionMaxAge)
 
 	apiSrv, err := server.NewServer(
 		cfg,

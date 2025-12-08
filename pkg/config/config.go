@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	Addr         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Addr          string
+	ReadTimeout   time.Duration
+	WriteTimeout  time.Duration
+	IdleTimeout   time.Duration
+	SessionMaxAge int
 
 	AllowedOrigins []string
 	Debug          bool
@@ -29,6 +30,7 @@ func (c *Config) Load(args []string) error {
 	fs.BoolVar(&c.Debug, "debug", false, "enable debug mode for detailed logging")
 	fs.StringVar(&c.DBConnURI, "DATABASE_URL", "postgresql://postgres:postgres@db/wizardwarriors", "database connection uri")
 	fs.StringVar(&c.RedisURL, "REDIS_URL", "redis://localhost:6379/0", "redis url")
+	fs.IntVar(&c.SessionMaxAge, "SESSION_MAX_AGE", 86400, "session cookie max age in seconds (default: 86400 = 24 hours)")
 
 	var allowedOrigins string
 	fs.StringVar(&allowedOrigins, "ALLOWED_ORIGINS", "http://ww.dev.localhost,http://localhost:3000", "comma-separated list of allowed origins for CORS")
