@@ -28,13 +28,34 @@ export declare type PlayerEvent = Message<"multiplayer.v1.PlayerEvent"> & {
   playerId?: ID;
 
   /**
-   * Optional payload depending on event
+   * Optional payload depending on event type
    *
-   * Only used for MOVE
+   * Used for JOIN (server ignores, generates own)
    *
    * @generated from field: multiplayer.v1.Vector2 position = 3;
    */
   position?: Vector2;
+
+  /**
+   * Deprecated: use input_action instead
+   *
+   * @generated from field: multiplayer.v1.PlayerInput input = 4;
+   */
+  input?: PlayerInput;
+
+  /**
+   * Used for INPUT type - which input changed
+   *
+   * @generated from field: multiplayer.v1.InputAction input_action = 5;
+   */
+  inputAction?: InputAction;
+
+  /**
+   * Used for ACTION type - fire, ability, etc.
+   *
+   * @generated from field: multiplayer.v1.GameAction game_action = 6;
+   */
+  gameAction?: GameAction;
 };
 
 /**
@@ -42,6 +63,89 @@ export declare type PlayerEvent = Message<"multiplayer.v1.PlayerEvent"> & {
  * Use `create(PlayerEventSchema)` to create a new message.
  */
 export declare const PlayerEventSchema: GenMessage<PlayerEvent>;
+
+/**
+ * Specific input that changed (event-based, not full state)
+ *
+ * @generated from message multiplayer.v1.InputAction
+ */
+export declare type InputAction = Message<"multiplayer.v1.InputAction"> & {
+  /**
+   * @generated from field: multiplayer.v1.InputType input = 1;
+   */
+  input: InputType;
+
+  /**
+   * true = key down, false = key up
+   *
+   * @generated from field: bool pressed = 2;
+   */
+  pressed: boolean;
+};
+
+/**
+ * Describes the message multiplayer.v1.InputAction.
+ * Use `create(InputActionSchema)` to create a new message.
+ */
+export declare const InputActionSchema: GenMessage<InputAction>;
+
+/**
+ * Game actions (fire, abilities, etc.)
+ *
+ * @generated from message multiplayer.v1.GameAction
+ */
+export declare type GameAction = Message<"multiplayer.v1.GameAction"> & {
+  /**
+   * @generated from field: multiplayer.v1.ActionType action = 1;
+   */
+  action: ActionType;
+
+  /**
+   * Optional target position (e.g., for aiming)
+   *
+   * @generated from field: multiplayer.v1.Vector2 target = 2;
+   */
+  target?: Vector2;
+};
+
+/**
+ * Describes the message multiplayer.v1.GameAction.
+ * Use `create(GameActionSchema)` to create a new message.
+ */
+export declare const GameActionSchema: GenMessage<GameAction>;
+
+/**
+ * Deprecated: Full input state - prefer InputAction for efficiency
+ *
+ * @generated from message multiplayer.v1.PlayerInput
+ */
+export declare type PlayerInput = Message<"multiplayer.v1.PlayerInput"> & {
+  /**
+   * @generated from field: bool move_up = 1;
+   */
+  moveUp: boolean;
+
+  /**
+   * @generated from field: bool move_down = 2;
+   */
+  moveDown: boolean;
+
+  /**
+   * @generated from field: bool move_left = 3;
+   */
+  moveLeft: boolean;
+
+  /**
+   * @generated from field: bool move_right = 4;
+   */
+  moveRight: boolean;
+};
+
+/**
+ * Describes the message multiplayer.v1.PlayerInput.
+ * Use `create(PlayerInputSchema)` to create a new message.
+ */
+export declare const PlayerInputSchema: GenMessage<PlayerInput>;
 
 /**
  * Types of player-related events
@@ -65,6 +169,8 @@ export enum PlayerEventType {
   LEAVE = 2,
 
   /**
+   * Deprecated: server ignores
+   *
    * @generated from enum value: PLAYER_EVENT_TYPE_MOVE = 3;
    */
   MOVE = 3,
@@ -82,10 +188,98 @@ export enum PlayerEventType {
    * @generated from enum value: PLAYER_EVENT_TYPE_READY = 5;
    */
   READY = 5,
+
+  /**
+   * Player input change event
+   *
+   * @generated from enum value: PLAYER_EVENT_TYPE_INPUT = 6;
+   */
+  INPUT = 6,
+
+  /**
+   * Player action (fire, ability, etc.)
+   *
+   * @generated from enum value: PLAYER_EVENT_TYPE_ACTION = 7;
+   */
+  ACTION = 7,
 }
 
 /**
  * Describes the enum multiplayer.v1.PlayerEventType.
  */
 export declare const PlayerEventTypeSchema: GenEnum<PlayerEventType>;
+
+/**
+ * Types of inputs the player can change
+ *
+ * @generated from enum multiplayer.v1.InputType
+ */
+export enum InputType {
+  /**
+   * @generated from enum value: INPUT_TYPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: INPUT_TYPE_MOVE_UP = 1;
+   */
+  MOVE_UP = 1,
+
+  /**
+   * @generated from enum value: INPUT_TYPE_MOVE_DOWN = 2;
+   */
+  MOVE_DOWN = 2,
+
+  /**
+   * @generated from enum value: INPUT_TYPE_MOVE_LEFT = 3;
+   */
+  MOVE_LEFT = 3,
+
+  /**
+   * @generated from enum value: INPUT_TYPE_MOVE_RIGHT = 4;
+   */
+  MOVE_RIGHT = 4,
+}
+
+/**
+ * Describes the enum multiplayer.v1.InputType.
+ */
+export declare const InputTypeSchema: GenEnum<InputType>;
+
+/**
+ * @generated from enum multiplayer.v1.ActionType
+ */
+export enum ActionType {
+  /**
+   * @generated from enum value: ACTION_TYPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * e.g., fireball
+   *
+   * @generated from enum value: ACTION_TYPE_PRIMARY_FIRE = 1;
+   */
+  PRIMARY_FIRE = 1,
+
+  /**
+   * @generated from enum value: ACTION_TYPE_ABILITY_1 = 2;
+   */
+  ABILITY_1 = 2,
+
+  /**
+   * @generated from enum value: ACTION_TYPE_ABILITY_2 = 3;
+   */
+  ABILITY_2 = 3,
+
+  /**
+   * @generated from enum value: ACTION_TYPE_INTERACT = 4;
+   */
+  INTERACT = 4,
+}
+
+/**
+ * Describes the enum multiplayer.v1.ActionType.
+ */
+export declare const ActionTypeSchema: GenEnum<ActionType>;
 

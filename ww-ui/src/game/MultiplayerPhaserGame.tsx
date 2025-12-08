@@ -14,7 +14,11 @@ import {
 import {
   PlayerEventSchema,
   PlayerEventType,
+  InputActionSchema,
+  InputType,
 } from "@common/gen/multiplayer/v1/player_pb";
+import { useAtomValue } from "jotai";
+import { gameStatsAtom } from "src/state";
 
 export interface IRefPhaserGame {
   game: Phaser.Game | null;
@@ -65,11 +69,16 @@ const MultiplayerPhaserGame = ({
   const chatInputRef = useRef<HTMLInputElement>(null);
 
   const { ws, isConnected, isConnecting, error, connect } = useSocket();
+  const gameStats = useAtomValue(gameStatsAtom);
 
   const [isReady, setIsReady] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessageDisplay[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [playersInLobby, setPlayersInLobby] = useState<string[]>([]);
+  
+  const playerIdRef = useRef<string>(
+    `${gameStats.user_id}-${Math.random().toString(36).substr(2, 6)}`
+  );
 
   useEffect(() => {
     if (token && !isConnected && !isConnecting) {
@@ -85,7 +94,9 @@ const MultiplayerPhaserGame = ({
         const bytes = new Uint8Array(event.data);
         const msg = fromBinary(GameMessageSchema, bytes);
         
-        console.log("Received message:", msg);
+        if (msg.type !== GameMessageType.GAME_STATE) {
+          console.log("Received message:", msg);
+        }
 
         switch (msg.type) {
           case GameMessageType.CHAT_MESSAGE:
@@ -105,8 +116,38 @@ const MultiplayerPhaserGame = ({
           case GameMessageType.PLAYER_EVENT:
             if (msg.payload.case === "playerEvent") {
               const playerEvent = msg.payload.value;
-              // Handle player events (join, leave, move, ready, etc.)
-              console.log("Player event:", playerEvent.type);
+              console.log("Player event:", playerEvent.type, playerEvent);
+              
+              switch (playerEvent.type) {
+                case PlayerEventType.JOIN:
+                  if (playerEvent.playerId && playerEvent.position) {
+                    EventBus.emit("multiplayer-player-joined", {
+                      playerId: playerEvent.playerId.value,
+                      username: playerEvent.playerId.value,
+                      x: playerEvent.position.x,
+                      y: playerEvent.position.y,
+                    });
+                  }
+                  break;
+                  
+                case PlayerEventType.LEAVE:
+                  if (playerEvent.playerId) {
+                    EventBus.emit("multiplayer-player-left", {
+                      playerId: playerEvent.playerId.value,
+                    });
+                  }
+                  break;
+                  
+                case PlayerEventType.MOVE:
+                  if (playerEvent.playerId && playerEvent.position) {
+                    EventBus.emit("multiplayer-player-move", {
+                      playerId: playerEvent.playerId.value,
+                      x: playerEvent.position.x,
+                      y: playerEvent.position.y,
+                    });
+                  }
+                  break;
+              }
             }
             break;
 
@@ -161,15 +202,34 @@ const MultiplayerPhaserGame = ({
   }, [currentActiveScene]);
 
   useEffect(() => {
-    const handleSendPosition = (position: { x: number; y: number }) => {
+    const handleSendInputChange = (data: { input: string; pressed: boolean }) => {
       if (!ws || !isConnected) return;
 
+      let inputType: typeof InputType[keyof typeof InputType];
+      switch (data.input) {
+        case "moveUp":
+          inputType = InputType.MOVE_UP;
+          break;
+        case "moveDown":
+          inputType = InputType.MOVE_DOWN;
+          break;
+        case "moveLeft":
+          inputType = InputType.MOVE_LEFT;
+          break;
+        case "moveRight":
+          inputType = InputType.MOVE_RIGHT;
+          break;
+        default:
+          return;
+      }
+
       const playerEvent = create(PlayerEventSchema, {
-        type: PlayerEventType.MOVE,
-        position: {
-          x: position.x,
-          y: position.y,
-        },
+        type: PlayerEventType.INPUT,
+        playerId: { value: playerIdRef.current },
+        inputAction: create(InputActionSchema, {
+          input: inputType,
+          pressed: data.pressed,
+        }),
       });
 
       const message = create(GameMessageSchema, {
@@ -183,10 +243,33 @@ const MultiplayerPhaserGame = ({
       ws.send(toBinary(GameMessageSchema, message));
     };
 
-    EventBus.on("send-player-position", handleSendPosition);
+    const handleSendJoin = () => {
+      if (!ws || !isConnected) return;
+
+      EventBus.emit("set-local-player-id", { playerId: playerIdRef.current });
+
+      const playerEvent = create(PlayerEventSchema, {
+        type: PlayerEventType.JOIN,
+        playerId: { value: playerIdRef.current },
+      });
+
+      const message = create(GameMessageSchema, {
+        type: GameMessageType.PLAYER_EVENT,
+        payload: {
+          case: "playerEvent",
+          value: playerEvent,
+        },
+      });
+
+      ws.send(toBinary(GameMessageSchema, message));
+    };
+
+    EventBus.on("send-input-change", handleSendInputChange);
+    EventBus.on("send-player-join", handleSendJoin);
 
     return () => {
-      EventBus.removeListener("send-player-position");
+      EventBus.removeListener("send-input-change");
+      EventBus.removeListener("send-player-join");
     };
   }, [ws, isConnected]);
 
@@ -194,10 +277,12 @@ const MultiplayerPhaserGame = ({
     if (!ws || !isConnected) return;
 
     setIsReady(true);
-    EventBus.emit("multiplayer-player-ready");
+    
+    EventBus.emit("multiplayer-game-start");
 
     const playerEvent = create(PlayerEventSchema, {
       type: PlayerEventType.READY,
+      playerId: { value: playerIdRef.current },
     });
 
     const message = create(GameMessageSchema, {
@@ -229,96 +314,101 @@ const MultiplayerPhaserGame = ({
     ws.send(toBinary(GameMessageSchema, message));
 
     setChatInput("");
+    
+     // Blur the input to return focus to the game
+    chatInputRef.current?.blur();
   };
 
   return (
     <div style={{ position: "relative" }}>
       <div ref={gameRef} />
 
-      {/* Lobby UI Overlay */}
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          maxWidth: "300px",
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          padding: "15px",
-          borderRadius: "8px",
-          color: "white",
-          zIndex: 100,
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Lobby</h3>
+      {/* Lobby UI Overlay - only show when not ready */}
+      {!isReady && (
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "20px",
+            maxWidth: "300px",
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            padding: "15px",
+            borderRadius: "8px",
+            color: "white",
+            zIndex: 100,
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Lobby</h3>
 
-        {error && (
-          <div
-            style={{
-              padding: "8px",
-              backgroundColor: "#ff4444",
-              borderRadius: "4px",
-              marginBottom: "10px",
-              fontSize: "12px",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {isConnecting && (
-          <div style={{ fontSize: "14px", marginBottom: "10px" }}>
-            Connecting...
-          </div>
-        )}
-
-        {isConnected && (
-          <>
-            <div style={{ marginBottom: "15px" }}>
-              <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                Players ({playersInLobby.length}):
-              </div>
-              <div
-                style={{
-                  backgroundColor: "#1a1a1a",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  maxHeight: "80px",
-                  overflowY: "auto",
-                  fontSize: "12px",
-                }}
-              >
-                {playersInLobby.length > 0 ? (
-                  playersInLobby.map((player, idx) => (
-                    <div key={idx} style={{ padding: "2px 0" }}>
-                      {player}
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ color: "#888" }}>No players</div>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={handleReady}
-              disabled={isReady}
+          {error && (
+            <div
               style={{
-                width: "100%",
                 padding: "8px",
-                backgroundColor: isReady ? "#666" : "#44ff44",
-                border: "none",
+                backgroundColor: "#ff4444",
                 borderRadius: "4px",
-                color: isReady ? "#aaa" : "#000",
-                fontSize: "14px",
-                fontWeight: "bold",
-                cursor: isReady ? "not-allowed" : "pointer",
+                marginBottom: "10px",
+                fontSize: "12px",
               }}
             >
-              {isReady ? "Ready!" : "Ready Up"}
-            </button>
-          </>
-        )}
-      </div>
+              {error}
+            </div>
+          )}
+
+          {isConnecting && (
+            <div style={{ fontSize: "14px", marginBottom: "10px" }}>
+              Connecting...
+            </div>
+          )}
+
+          {isConnected && (
+            <>
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ fontSize: "14px", marginBottom: "5px" }}>
+                  Players ({playersInLobby.length}):
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#1a1a1a",
+                    padding: "8px",
+                    borderRadius: "4px",
+                    maxHeight: "80px",
+                    overflowY: "auto",
+                    fontSize: "12px",
+                  }}
+                >
+                  {playersInLobby.length > 0 ? (
+                    playersInLobby.map((player, idx) => (
+                      <div key={idx} style={{ padding: "2px 0" }}>
+                        {player}
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: "#888" }}>No players</div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleReady}
+                disabled={isReady}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  backgroundColor: isReady ? "#666" : "#44ff44",
+                  border: "none",
+                  borderRadius: "4px",
+                  color: isReady ? "#aaa" : "#000",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: isReady ? "not-allowed" : "pointer",
+                }}
+              >
+                {isReady ? "Ready!" : "Ready Up"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Chat UI */}
       <div
@@ -367,6 +457,8 @@ const MultiplayerPhaserGame = ({
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            onKeyUp={(e) => e.stopPropagation()}
             placeholder="Type a message..."
             disabled={!isConnected}
             style={{

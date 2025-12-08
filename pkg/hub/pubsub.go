@@ -79,7 +79,6 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 						continue
 					}
 
-					// Handle based on message type
 					switch gameMsg.Type {
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_CHAT_MESSAGE:
 						if chatMsg := gameMsg.GetChatMessage(); chatMsg != nil {
@@ -91,6 +90,57 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_PLAYER_EVENT:
 						if playerEvent := gameMsg.GetPlayerEvent(); playerEvent != nil {
 							log.Printf("Player event: %v for player %v", playerEvent.Type, playerEvent.PlayerId)
+
+							switch playerEvent.Type {
+							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_JOIN:
+								if playerEvent.PlayerId != nil {
+									// Server generates spawn position (ignores client suggestion)
+									hub.gameStateManager.AddPlayer(
+										playerEvent.PlayerId.Value,
+										playerEvent.PlayerId.Value, // Using ID as username for now
+									)
+
+									// Get the server-assigned position to send back
+									x, y, _ := hub.gameStateManager.GetPlayerPosition(playerEvent.PlayerId.Value)
+
+									// Create a new join event with server-assigned position
+									joinMsg := &multiplayerv1.GameMessage{
+										Type: multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_PLAYER_EVENT,
+										Payload: &multiplayerv1.GameMessage_PlayerEvent{
+											PlayerEvent: &multiplayerv1.PlayerEvent{
+												Type:     multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_JOIN,
+												PlayerId: playerEvent.PlayerId,
+												Position: &multiplayerv1.Vector2{X: x, Y: y},
+											},
+										},
+									}
+
+									wire, _ := toWire(joinMsg)
+									hub.broadcastToClients(wire)
+								}
+
+							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_INPUT:
+								// Client sends single input change (key press/release)
+								if playerEvent.PlayerId != nil && playerEvent.InputAction != nil {
+									hub.gameStateManager.UpdatePlayerInputAction(
+										playerEvent.PlayerId.Value,
+										playerEvent.InputAction,
+									)
+								}
+
+							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_MOVE:
+								// Deprecated: ignore position updates from clients
+								// Server is authoritative - only INPUT events affect movement
+								log.Printf("Ignoring deprecated MOVE event from %v", playerEvent.PlayerId)
+
+							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_LEAVE:
+								if playerEvent.PlayerId != nil {
+									hub.gameStateManager.RemovePlayer(playerEvent.PlayerId.Value)
+
+									wire, _ := toWire(gameMsg)
+									hub.broadcastToClients(wire)
+								}
+							}
 						}
 
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_GAME_STATE:

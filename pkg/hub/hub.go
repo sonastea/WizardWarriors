@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sonastea/WizardWarriors/pkg/config"
@@ -17,7 +18,8 @@ type Hub struct {
 	// rooms     map[*Room]bool
 	// roomsLive map[string]*Room
 
-	pubsub *PubSub
+	pubsub           *PubSub
+	gameStateManager *GameStateManager
 }
 
 func New(cfg *config.Config, stores *Stores, pool *redis.Client) (*Hub, error) {
@@ -34,6 +36,10 @@ func New(cfg *config.Config, stores *Stores, pool *redis.Client) (*Hub, error) {
 
 		pubsub: pubsub,
 	}
+
+	// Initialize game state manager with 30ms tick rate (33 updates/sec)
+	hub.gameStateManager = NewGameStateManager(hub, 30*time.Millisecond)
+	hub.gameStateManager.Start()
 
 	// hub.users = userStore.GetAllUsers()
 

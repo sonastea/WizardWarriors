@@ -9,7 +9,7 @@ import { file_multiplayer_v1_common } from "./common_pb";
  * Describes the file multiplayer/v1/player.proto.
  */
 export const file_multiplayer_v1_player = /*@__PURE__*/
-  fileDesc("ChttdWx0aXBsYXllci92MS9wbGF5ZXIucHJvdG8SDm11bHRpcGxheWVyLnYxIo4BCgtQbGF5ZXJFdmVudBItCgR0eXBlGAEgASgOMh8ubXVsdGlwbGF5ZXIudjEuUGxheWVyRXZlbnRUeXBlEiUKCXBsYXllcl9pZBgCIAEoCzISLm11bHRpcGxheWVyLnYxLklEEikKCHBvc2l0aW9uGAMgASgLMhcubXVsdGlwbGF5ZXIudjEuVmVjdG9yMirCAQoPUGxheWVyRXZlbnRUeXBlEiEKHVBMQVlFUl9FVkVOVF9UWVBFX1VOU1BFQ0lGSUVEEAASGgoWUExBWUVSX0VWRU5UX1RZUEVfSk9JThABEhsKF1BMQVlFUl9FVkVOVF9UWVBFX0xFQVZFEAISGgoWUExBWUVSX0VWRU5UX1RZUEVfTU9WRRADEhoKFlBMQVlFUl9FVkVOVF9UWVBFX1JFQUQQBBIbChdQTEFZRVJfRVZFTlRfVFlQRV9SRUFEWRAFQsYBChJjb20ubXVsdGlwbGF5ZXIudjFCC1BsYXllclByb3RvUAFaSmdpdGh1Yi5jb20vc29uYXN0ZWEvV2l6YXJkV2FycmlvcnMvY29tbW9uL2dlbi9tdWx0aXBsYXllci92MTttdWx0aXBsYXllcnYxogIDTVhYqgIOTXVsdGlwbGF5ZXIuVjHKAg5NdWx0aXBsYXllclxWMeICGk11bHRpcGxheWVyXFYxXEdQQk1ldGFkYXRh6gIPTXVsdGlwbGF5ZXI6OlYxYgZwcm90bzM", [file_multiplayer_v1_common]);
+  fileDesc("ChttdWx0aXBsYXllci92MS9wbGF5ZXIucHJvdG8SDm11bHRpcGxheWVyLnYxIp4CCgtQbGF5ZXJFdmVudBItCgR0eXBlGAEgASgOMh8ubXVsdGlwbGF5ZXIudjEuUGxheWVyRXZlbnRUeXBlEiUKCXBsYXllcl9pZBgCIAEoCzISLm11bHRpcGxheWVyLnYxLklEEikKCHBvc2l0aW9uGAMgASgLMhcubXVsdGlwbGF5ZXIudjEuVmVjdG9yMhIqCgVpbnB1dBgEIAEoCzIbLm11bHRpcGxheWVyLnYxLlBsYXllcklucHV0EjEKDGlucHV0X2FjdGlvbhgFIAEoCzIbLm11bHRpcGxheWVyLnYxLklucHV0QWN0aW9uEi8KC2dhbWVfYWN0aW9uGAYgASgLMhoubXVsdGlwbGF5ZXIudjEuR2FtZUFjdGlvbiJICgtJbnB1dEFjdGlvbhIoCgVpbnB1dBgBIAEoDjIZLm11bHRpcGxheWVyLnYxLklucHV0VHlwZRIPCgdwcmVzc2VkGAIgASgIImEKCkdhbWVBY3Rpb24SKgoGYWN0aW9uGAEgASgOMhoubXVsdGlwbGF5ZXIudjEuQWN0aW9uVHlwZRInCgZ0YXJnZXQYAiABKAsyFy5tdWx0aXBsYXllci52MS5WZWN0b3IyIlgKC1BsYXllcklucHV0Eg8KB21vdmVfdXAYASABKAgSEQoJbW92ZV9kb3duGAIgASgIEhEKCW1vdmVfbGVmdBgDIAEoCBISCgptb3ZlX3JpZ2h0GAQgASgIKv0BCg9QbGF5ZXJFdmVudFR5cGUSIQodUExBWUVSX0VWRU5UX1RZUEVfVU5TUEVDSUZJRUQQABIaChZQTEFZRVJfRVZFTlRfVFlQRV9KT0lOEAESGwoXUExBWUVSX0VWRU5UX1RZUEVfTEVBVkUQAhIaChZQTEFZRVJfRVZFTlRfVFlQRV9NT1ZFEAMSGgoWUExBWUVSX0VWRU5UX1RZUEVfUkVBRBAEEhsKF1BMQVlFUl9FVkVOVF9UWVBFX1JFQURZEAUSGwoXUExBWUVSX0VWRU5UX1RZUEVfSU5QVVQQBhIcChhQTEFZRVJfRVZFTlRfVFlQRV9BQ1RJT04QByqOAQoJSW5wdXRUeXBlEhoKFklOUFVUX1RZUEVfVU5TUEVDSUZJRUQQABIWChJJTlBVVF9UWVBFX01PVkVfVVAQARIYChRJTlBVVF9UWVBFX01PVkVfRE9XThACEhgKFElOUFVUX1RZUEVfTU9WRV9MRUZUEAMSGQoVSU5QVVRfVFlQRV9NT1ZFX1JJR0hUEAQqlwEKCkFjdGlvblR5cGUSGwoXQUNUSU9OX1RZUEVfVU5TUEVDSUZJRUQQABIcChhBQ1RJT05fVFlQRV9QUklNQVJZX0ZJUkUQARIZChVBQ1RJT05fVFlQRV9BQklMSVRZXzEQAhIZChVBQ1RJT05fVFlQRV9BQklMSVRZXzIQAxIYChRBQ1RJT05fVFlQRV9JTlRFUkFDVBAEQsYBChJjb20ubXVsdGlwbGF5ZXIudjFCC1BsYXllclByb3RvUAFaSmdpdGh1Yi5jb20vc29uYXN0ZWEvV2l6YXJkV2FycmlvcnMvY29tbW9uL2dlbi9tdWx0aXBsYXllci92MTttdWx0aXBsYXllcnYxogIDTVhYqgIOTXVsdGlwbGF5ZXIuVjHKAg5NdWx0aXBsYXllclxWMeICGk11bHRpcGxheWVyXFYxXEdQQk1ldGFkYXRh6gIPTXVsdGlwbGF5ZXI6OlYxYgZwcm90bzM", [file_multiplayer_v1_common]);
 
 /**
  * Describes the message multiplayer.v1.PlayerEvent.
@@ -17,6 +17,27 @@ export const file_multiplayer_v1_player = /*@__PURE__*/
  */
 export const PlayerEventSchema = /*@__PURE__*/
   messageDesc(file_multiplayer_v1_player, 0);
+
+/**
+ * Describes the message multiplayer.v1.InputAction.
+ * Use `create(InputActionSchema)` to create a new message.
+ */
+export const InputActionSchema = /*@__PURE__*/
+  messageDesc(file_multiplayer_v1_player, 1);
+
+/**
+ * Describes the message multiplayer.v1.GameAction.
+ * Use `create(GameActionSchema)` to create a new message.
+ */
+export const GameActionSchema = /*@__PURE__*/
+  messageDesc(file_multiplayer_v1_player, 2);
+
+/**
+ * Describes the message multiplayer.v1.PlayerInput.
+ * Use `create(PlayerInputSchema)` to create a new message.
+ */
+export const PlayerInputSchema = /*@__PURE__*/
+  messageDesc(file_multiplayer_v1_player, 3);
 
 /**
  * Describes the enum multiplayer.v1.PlayerEventType.
@@ -31,4 +52,30 @@ export const PlayerEventTypeSchema = /*@__PURE__*/
  */
 export const PlayerEventType = /*@__PURE__*/
   tsEnum(PlayerEventTypeSchema);
+
+/**
+ * Describes the enum multiplayer.v1.InputType.
+ */
+export const InputTypeSchema = /*@__PURE__*/
+  enumDesc(file_multiplayer_v1_player, 1);
+
+/**
+ * Types of inputs the player can change
+ *
+ * @generated from enum multiplayer.v1.InputType
+ */
+export const InputType = /*@__PURE__*/
+  tsEnum(InputTypeSchema);
+
+/**
+ * Describes the enum multiplayer.v1.ActionType.
+ */
+export const ActionTypeSchema = /*@__PURE__*/
+  enumDesc(file_multiplayer_v1_player, 2);
+
+/**
+ * @generated from enum multiplayer.v1.ActionType
+ */
+export const ActionType = /*@__PURE__*/
+  tsEnum(ActionTypeSchema);
 

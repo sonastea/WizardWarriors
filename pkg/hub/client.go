@@ -8,6 +8,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/lithammer/shortuuid"
+	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -36,6 +38,7 @@ type Client struct {
 	hub *Hub
 
 	sendChan chan []byte
+	playerId string
 }
 
 func NewClient(hub *Hub, conn *websocket.Conn) error {
@@ -105,9 +108,34 @@ func (client *Client) readPump() {
 				log.Printf("error: %v", err)
 			}
 			log.Printf("Client %s (%s) disconnected", client.Name, client.Xid)
+
+			// Handle player leaving - notify game state
+			if client.playerId != "" {
+				client.hub.gameStateManager.RemovePlayer(client.playerId)
+			}
 			break
 		}
+
+		// Try to extract player ID from incoming messages for tracking
+		// This helps us associate the client with their in-game player
+		client.extractPlayerIdFromMessage(message)
+
 		client.hub.pubsub.conn.Publish(context.Background(), "chat.lobby", message)
+	}
+}
+
+func (client *Client) extractPlayerIdFromMessage(message []byte) {
+	// Parse the protobuf message to extract player ID
+	gameMsg := &multiplayerv1.GameMessage{}
+	if err := proto.Unmarshal(message, gameMsg); err != nil {
+		return
+	}
+
+	// Check if it's a player event with a player ID
+	if gameMsg.Type == multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_PLAYER_EVENT {
+		if playerEvent := gameMsg.GetPlayerEvent(); playerEvent != nil && playerEvent.PlayerId != nil {
+			client.playerId = playerEvent.PlayerId.Value
+		}
 	}
 }
 
