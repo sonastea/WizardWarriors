@@ -77,23 +77,27 @@ func (hub *Hub) Run(ctx context.Context) {
 	}
 }
 
+func (h *Hub) getTotalClients() int {
+	return len(h.clients)
+}
+
 func (hub *Hub) addClient(client *Client) {
 	hub.clientsMu.Lock()
 	hub.clients[client] = true
 	hub.clientsMu.Unlock()
 
-	// Add user to lobby set in Redis using Xid (userID)
+	// Add user to lobby set in Redis
 	ctx := context.Background()
-	if err := hub.redis.SAdd(ctx, RedisKeyLobbyUsers, client.Xid).Err(); err != nil {
+	if err := hub.redis.SAdd(ctx, RedisKeyLobbyUsers, client.UserID).Err(); err != nil {
 		log.Printf("Failed to add user to lobby in Redis: %v", err)
 	}
 
 	// Store the username mapping in Redis so we can look it up later
-	if err := hub.redis.HSet(ctx, "lobby:usernames", client.Xid, client.Username).Err(); err != nil {
+	if err := hub.redis.HSet(ctx, "lobby:usernames", client.UserID, client.Username).Err(); err != nil {
 		log.Printf("Failed to store username in Redis: %v", err)
 	}
 
-	fmt.Println("Joined size of connection pool: ", len(hub.clients))
+	log.Printf("%s (%s) connected - connection pool size: %d", client.Username, client.UserID, hub.getTotalClients())
 	hub.broadcastLobbyState()
 }
 
@@ -107,18 +111,16 @@ func (hub *Hub) removeClient(client *Client) {
 
 	// Remove user from both lobby and game sets in Redis
 	ctx := context.Background()
-	if err := hub.redis.SRem(ctx, RedisKeyLobbyUsers, client.Xid).Err(); err != nil {
+	if err := hub.redis.SRem(ctx, RedisKeyLobbyUsers, client.UserID).Err(); err != nil {
 		log.Printf("Failed to remove user from lobby in Redis: %v", err)
 	}
 	// Remove username mapping
-	if err := hub.redis.HDel(ctx, "lobby:usernames", client.Xid).Err(); err != nil {
+	if err := hub.redis.HDel(ctx, "lobby:usernames", client.UserID).Err(); err != nil {
 		log.Printf("Failed to remove username from Redis: %v", err)
 	}
-	// Also remove by playerId if they joined the game
-	if client.playerId != "" {
-		if err := hub.redis.SRem(ctx, RedisKeyGameUsers, client.playerId).Err(); err != nil {
-			log.Printf("Failed to remove user from game in Redis: %v", err)
-		}
+	// Also remove from game users set
+	if err := hub.redis.SRem(ctx, RedisKeyGameUsers, client.UserID).Err(); err != nil {
+		log.Printf("Failed to remove user from game in Redis: %v", err)
 	}
 
 	hub.broadcastLobbyState()
@@ -149,6 +151,8 @@ func (hub *Hub) GetSessionInfo(token string) (*SessionInfo, error) {
 	if len(result) == 0 {
 		return nil, fmt.Errorf("session not found or expired")
 	}
+
+	log.Printf("session info: %+v", result)
 
 	return &SessionInfo{
 		UserID:   result["user_id"],

@@ -18,7 +18,7 @@ const (
 )
 
 type PlayerState struct {
-	PlayerId string
+	UserID   string
 	Username string
 	X        float32
 	Y        float32
@@ -47,7 +47,7 @@ func NewGameStateManager(hub *Hub, tickRate time.Duration) *GameStateManager {
 }
 
 // AddPlayer spawns a player at a random valid position within map bounds
-func (gsm *GameStateManager) AddPlayer(playerId string, username string) {
+func (gsm *GameStateManager) AddPlayer(userID string, username string) {
 	gsm.mu.Lock()
 	defer gsm.mu.Unlock()
 
@@ -55,8 +55,8 @@ func (gsm *GameStateManager) AddPlayer(playerId string, username string) {
 	spawnX := PlayerRadius + rand.Float32()*(MapWidth-2*PlayerRadius)
 	spawnY := PlayerRadius + rand.Float32()*(MapHeight-2*PlayerRadius)
 
-	gsm.players[playerId] = &PlayerState{
-		PlayerId: playerId,
+	gsm.players[userID] = &PlayerState{
+		UserID:   userID,
 		Username: username,
 		X:        spawnX,
 		Y:        spawnY,
@@ -64,29 +64,29 @@ func (gsm *GameStateManager) AddPlayer(playerId string, username string) {
 }
 
 // GetPlayerPosition returns the server-authoritative position for a player
-func (gsm *GameStateManager) GetPlayerPosition(playerId string) (float32, float32, bool) {
+func (gsm *GameStateManager) GetPlayerPosition(userID string) (float32, float32, bool) {
 	gsm.mu.RLock()
 	defer gsm.mu.RUnlock()
 
-	if player, exists := gsm.players[playerId]; exists {
+	if player, exists := gsm.players[userID]; exists {
 		return player.X, player.Y, true
 	}
 	return 0, 0, false
 }
 
-func (gsm *GameStateManager) RemovePlayer(playerId string) {
+func (gsm *GameStateManager) RemovePlayer(userID string) {
 	gsm.mu.Lock()
 	defer gsm.mu.Unlock()
 
-	delete(gsm.players, playerId)
+	delete(gsm.players, userID)
 }
 
 // UpdatePlayerInputAction updates a single input state based on key press/release event
-func (gsm *GameStateManager) UpdatePlayerInputAction(playerId string, inputAction *multiplayerv1.InputAction) {
+func (gsm *GameStateManager) UpdatePlayerInputAction(userID string, inputAction *multiplayerv1.InputAction) {
 	gsm.mu.Lock()
 	defer gsm.mu.Unlock()
 
-	if player, exists := gsm.players[playerId]; exists && inputAction != nil {
+	if player, exists := gsm.players[userID]; exists && inputAction != nil {
 		switch inputAction.Input {
 		case multiplayerv1.InputType_INPUT_TYPE_MOVE_UP:
 			player.MoveUp = inputAction.Pressed
@@ -193,7 +193,7 @@ func (gsm *GameStateManager) tick() {
 	playerStates := make([]*multiplayerv1.PlayerState, 0, len(gsm.players))
 	for _, player := range gsm.players {
 		playerStates = append(playerStates, &multiplayerv1.PlayerState{
-			PlayerId: &multiplayerv1.ID{Value: player.PlayerId},
+			PlayerId: &multiplayerv1.ID{Value: player.UserID},
 			Position: &multiplayerv1.Vector2{
 				X: player.X,
 				Y: player.Y,
