@@ -150,6 +150,18 @@ func (gsm *GameStateManager) GetPlayers() []*PlayerState {
 	return players
 }
 
+// GetPlayerIds returns a list of all player IDs currently in the game
+func (gsm *GameStateManager) GetPlayerIds() []string {
+	gsm.mu.RLock()
+	defer gsm.mu.RUnlock()
+
+	ids := make([]string, 0, len(gsm.players))
+	for id := range gsm.players {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (gsm *GameStateManager) Start() {
 	ticker := time.NewTicker(gsm.tickRate)
 	go func() {

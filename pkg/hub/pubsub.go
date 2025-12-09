@@ -27,13 +27,11 @@ type PubSub struct {
 	userStore store.UserStore
 }
 
-func NewPubSub(cfg *config.Config, stores *Stores, pool *redis.Client) (*PubSub, error) {
-	opt, err := redis.ParseURL(cfg.RedisURL)
-	if err != nil {
-		log.Fatalf("RedisUrl Error: %s\n", err)
+func NewPubSub(cfg *config.Config, stores *Stores) (*PubSub, error) {
+	rdsClient := redis.NewClient(cfg.RedisOpts)
+	if rdsClient == nil {
+		log.Fatalln("Unable to create redis client")
 	}
-
-	conn := redis.NewClient(opt)
 
 	subs := []Space{
 		"chat.lobby",
@@ -46,7 +44,7 @@ func NewPubSub(cfg *config.Config, stores *Stores, pool *redis.Client) (*PubSub,
 	}
 
 	pubsub := &PubSub{
-		conn:          conn,
+		conn:          rdsClient,
 		subs:          subs,
 		subscriptions: make(map[Space]*redis.PubSub),
 
@@ -100,6 +98,11 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 										playerEvent.PlayerId.Value, // Using ID as username for now
 									)
 
+									// Move user from lobby to game in Redis
+									if err := hub.MoveUserToGame(playerEvent.PlayerId.Value); err != nil {
+										log.Printf("Failed to move user to game in Redis: %v", err)
+									}
+
 									// Get the server-assigned position to send back
 									x, y, _ := hub.gameStateManager.GetPlayerPosition(playerEvent.PlayerId.Value)
 
@@ -117,6 +120,9 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 
 									wire, _ := toWire(joinMsg)
 									hub.broadcastToClients(wire)
+
+									// Broadcast updated lobby state
+									hub.broadcastLobbyState()
 								}
 
 							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_INPUT:
@@ -137,8 +143,16 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 								if playerEvent.PlayerId != nil {
 									hub.gameStateManager.RemovePlayer(playerEvent.PlayerId.Value)
 
+									// Remove user from game set in Redis (they'll be removed from lobby on disconnect)
+									if err := hub.redis.SRem(context.Background(), RedisKeyGameUsers, playerEvent.PlayerId.Value).Err(); err != nil {
+										log.Printf("Failed to remove user from game in Redis: %v", err)
+									}
+
 									wire, _ := toWire(gameMsg)
 									hub.broadcastToClients(wire)
+
+									// Broadcast updated lobby state
+									hub.broadcastLobbyState()
 								}
 							}
 						}

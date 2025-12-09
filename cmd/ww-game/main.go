@@ -25,7 +25,7 @@ func main() {
 	cfg.Load(os.Args[1:])
 	cfg.RedisOpts = config.NewRedisOpts(cfg.RedisURL)
 
-	h, err := hub.New(cfg, nil, nil)
+	h, err := hub.New(cfg, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -14,6 +14,7 @@ message GameMessage {
     PlayerEvent player_event        = 3;
     GameState   game_state          = 4;
     Announcement chat_announcement  = 5;
+    LobbyState  lobby_state         = 6;
   }
 }
 
@@ -24,6 +25,7 @@ enum GameMessageType {
   GAME_MESSAGE_TYPE_PLAYER_EVENT = 2;
   GAME_MESSAGE_TYPE_GAME_STATE   = 3;
   GAME_MESSAGE_TYPE_ANNOUNCEMENT = 4;
+  GAME_MESSAGE_TYPE_LOBBY_STATE  = 5;
 }
 
 // Chat from a player
@@ -48,4 +50,17 @@ message GameState {
 message PlayerState {
   ID player_id     = 1;
   Vector2 position = 2;
+}
+
+// Lobby state showing connected users and in-game players
+message LobbyState {
+  repeated LobbyUser lobby_users = 1;  // All connected users (in lobby, not yet in game)
+  repeated LobbyUser game_users  = 2;  // Users who have joined the game (readied up)
+}
+
+// User info for lobby display
+message LobbyUser {
+  ID user_id   = 1;
+  string name  = 2;
+  bool is_ready = 3;
 }

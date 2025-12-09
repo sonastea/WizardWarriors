@@ -50,6 +50,12 @@ export declare type GameMessage = Message<"multiplayer.v1.GameMessage"> & {
      */
     value: Announcement;
     case: "chatAnnouncement";
+  } | {
+    /**
+     * @generated from field: multiplayer.v1.LobbyState lobby_state = 6;
+     */
+    value: LobbyState;
+    case: "lobbyState";
   } | { case: undefined; value?: undefined };
 };
 
@@ -152,6 +158,61 @@ export declare type PlayerState = Message<"multiplayer.v1.PlayerState"> & {
 export declare const PlayerStateSchema: GenMessage<PlayerState>;
 
 /**
+ * Lobby state showing connected users and in-game players
+ *
+ * @generated from message multiplayer.v1.LobbyState
+ */
+export declare type LobbyState = Message<"multiplayer.v1.LobbyState"> & {
+  /**
+   * All connected users (in lobby, not yet in game)
+   *
+   * @generated from field: repeated multiplayer.v1.LobbyUser lobby_users = 1;
+   */
+  lobbyUsers: LobbyUser[];
+
+  /**
+   * Users who have joined the game (readied up)
+   *
+   * @generated from field: repeated multiplayer.v1.LobbyUser game_users = 2;
+   */
+  gameUsers: LobbyUser[];
+};
+
+/**
+ * Describes the message multiplayer.v1.LobbyState.
+ * Use `create(LobbyStateSchema)` to create a new message.
+ */
+export declare const LobbyStateSchema: GenMessage<LobbyState>;
+
+/**
+ * User info for lobby display
+ *
+ * @generated from message multiplayer.v1.LobbyUser
+ */
+export declare type LobbyUser = Message<"multiplayer.v1.LobbyUser"> & {
+  /**
+   * @generated from field: multiplayer.v1.ID user_id = 1;
+   */
+  userId?: ID;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: bool is_ready = 3;
+   */
+  isReady: boolean;
+};
+
+/**
+ * Describes the message multiplayer.v1.LobbyUser.
+ * Use `create(LobbyUserSchema)` to create a new message.
+ */
+export declare const LobbyUserSchema: GenMessage<LobbyUser>;
+
+/**
  * Discriminator for GameMessage
  *
  * @generated from enum multiplayer.v1.GameMessageType
@@ -181,6 +242,11 @@ export enum GameMessageType {
    * @generated from enum value: GAME_MESSAGE_TYPE_ANNOUNCEMENT = 4;
    */
   ANNOUNCEMENT = 4,
+
+  /**
+   * @generated from enum value: GAME_MESSAGE_TYPE_LOBBY_STATE = 5;
+   */
+  LOBBY_STATE = 5,
 }
 
 /**

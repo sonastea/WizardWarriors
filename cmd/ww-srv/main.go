@@ -10,6 +10,7 @@ import (
 	"github.com/sonastea/WizardWarriors/pkg/config"
 	db "github.com/sonastea/WizardWarriors/pkg/database"
 	"github.com/sonastea/WizardWarriors/pkg/handler"
+	"github.com/sonastea/WizardWarriors/pkg/hub"
 	"github.com/sonastea/WizardWarriors/pkg/repository"
 	"github.com/sonastea/WizardWarriors/pkg/server"
 	"github.com/sonastea/WizardWarriors/pkg/service"
@@ -24,7 +25,12 @@ func main() {
 
 	redisClient := redis.NewClient(cfg.RedisOpts)
 
-	_, err := pgxpool.New(context.Background(), cfg.DBConnURI)
+	h, err := hub.New(cfg, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = pgxpool.New(context.Background(), cfg.DBConnURI)
 	if err != nil {
 		panic(err)
 	}
@@ -40,6 +46,7 @@ func main() {
 
 	apiSrv, err := server.NewServer(
 		cfg,
+		server.WithHub(h),
 		server.WithRedis(redisClient),
 		server.WithApiHandler(apiHandler),
 	)

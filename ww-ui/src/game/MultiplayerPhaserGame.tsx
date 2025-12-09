@@ -60,6 +60,12 @@ interface ChatMessageDisplay {
   timestamp: number;
 }
 
+interface LobbyUserDisplay {
+  odId: string;
+  name: string;
+  isReady: boolean;
+}
+
 const MultiplayerPhaserGame = ({
   currentActiveScene,
   token,
@@ -74,8 +80,9 @@ const MultiplayerPhaserGame = ({
   const [isReady, setIsReady] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessageDisplay[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [playersInLobby, setPlayersInLobby] = useState<string[]>([]);
-  
+  const [lobbyUsers, setLobbyUsers] = useState<LobbyUserDisplay[]>([]);
+  const [gameUsers, setGameUsers] = useState<LobbyUserDisplay[]>([]);
+
   const playerIdRef = useRef<string>(
     `${gameStats.user_id}-${Math.random().toString(36).substr(2, 6)}`
   );
@@ -93,10 +100,6 @@ const MultiplayerPhaserGame = ({
       try {
         const bytes = new Uint8Array(event.data);
         const msg = fromBinary(GameMessageSchema, bytes);
-        
-        if (msg.type !== GameMessageType.GAME_STATE) {
-          console.log("Received message:", msg);
-        }
 
         switch (msg.type) {
           case GameMessageType.CHAT_MESSAGE:
@@ -116,28 +119,28 @@ const MultiplayerPhaserGame = ({
           case GameMessageType.PLAYER_EVENT:
             if (msg.payload.case === "playerEvent") {
               const playerEvent = msg.payload.value;
-              console.log("Player event:", playerEvent.type, playerEvent);
-              
               switch (playerEvent.type) {
                 case PlayerEventType.JOIN:
                   if (playerEvent.playerId && playerEvent.position) {
+                    const joinedPlayerId = playerEvent.playerId.value;
                     EventBus.emit("multiplayer-player-joined", {
-                      playerId: playerEvent.playerId.value,
-                      username: playerEvent.playerId.value,
+                      playerId: joinedPlayerId,
+                      username: joinedPlayerId,
                       x: playerEvent.position.x,
                       y: playerEvent.position.y,
                     });
                   }
                   break;
-                  
+
                 case PlayerEventType.LEAVE:
                   if (playerEvent.playerId) {
+                    const leftPlayerId = playerEvent.playerId.value;
                     EventBus.emit("multiplayer-player-left", {
-                      playerId: playerEvent.playerId.value,
+                      playerId: leftPlayerId,
                     });
                   }
                   break;
-                  
+
                 case PlayerEventType.MOVE:
                   if (playerEvent.playerId && playerEvent.position) {
                     EventBus.emit("multiplayer-player-move", {
@@ -155,6 +158,26 @@ const MultiplayerPhaserGame = ({
             if (msg.payload.case === "gameState") {
               const gameState = msg.payload.value;
               EventBus.emit("multiplayer-game-state", gameState);
+            }
+            break;
+
+          case GameMessageType.LOBBY_STATE:
+            if (msg.payload.case === "lobbyState") {
+              const lobbyState = msg.payload.value;
+              setLobbyUsers(
+                lobbyState.lobbyUsers.map((u) => ({
+                  odId: u.userId?.value || "",
+                  name: u.name || u.userId?.value || "Unknown",
+                  isReady: u.isReady,
+                }))
+              );
+              setGameUsers(
+                lobbyState.gameUsers.map((u) => ({
+                  odId: u.userId?.value || "",
+                  name: u.name || u.userId?.value || "Unknown",
+                  isReady: u.isReady,
+                }))
+              );
             }
             break;
 
@@ -202,10 +225,13 @@ const MultiplayerPhaserGame = ({
   }, [currentActiveScene]);
 
   useEffect(() => {
-    const handleSendInputChange = (data: { input: string; pressed: boolean }) => {
+    const handleSendInputChange = (data: {
+      input: string;
+      pressed: boolean;
+    }) => {
       if (!ws || !isConnected) return;
 
-      let inputType: typeof InputType[keyof typeof InputType];
+      let inputType: (typeof InputType)[keyof typeof InputType];
       switch (data.input) {
         case "moveUp":
           inputType = InputType.MOVE_UP;
@@ -277,7 +303,7 @@ const MultiplayerPhaserGame = ({
     if (!ws || !isConnected) return;
 
     setIsReady(true);
-    
+
     EventBus.emit("multiplayer-game-start");
 
     const playerEvent = create(PlayerEventSchema, {
@@ -314,8 +340,8 @@ const MultiplayerPhaserGame = ({
     ws.send(toBinary(GameMessageSchema, message));
 
     setChatInput("");
-    
-     // Blur the input to return focus to the game
+
+    // Blur the input to return focus to the game
     chatInputRef.current?.blur();
   };
 
@@ -364,26 +390,58 @@ const MultiplayerPhaserGame = ({
             <>
               <div style={{ marginBottom: "15px" }}>
                 <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                  Players ({playersInLobby.length}):
+                  Waiting ({lobbyUsers.length}):{" "}
                 </div>
                 <div
                   style={{
                     backgroundColor: "#1a1a1a",
                     padding: "8px",
                     borderRadius: "4px",
-                    maxHeight: "80px",
+                    maxHeight: "60px",
                     overflowY: "auto",
                     fontSize: "12px",
                   }}
                 >
-                  {playersInLobby.length > 0 ? (
-                    playersInLobby.map((player, idx) => (
-                      <div key={idx} style={{ padding: "2px 0" }}>
-                        {player}
+                  {lobbyUsers.length > 0 ? (
+                    lobbyUsers.map((user, idx) => (
+                      <div
+                        key={idx}
+                        style={{ padding: "2px 0", color: "#aaa" }}
+                      >
+                        {user.name}
                       </div>
                     ))
                   ) : (
-                    <div style={{ color: "#888" }}>No players</div>
+                    <div style={{ color: "#888" }}>No players waiting</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ fontSize: "14px", marginBottom: "5px" }}>
+                  Gaming ({gameUsers.length}):
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#1a1a1a",
+                    padding: "8px",
+                    borderRadius: "4px",
+                    maxHeight: "60px",
+                    overflowY: "auto",
+                    fontSize: "12px",
+                  }}
+                >
+                  {gameUsers.length > 0 ? (
+                    gameUsers.map((user, idx) => (
+                      <div
+                        key={idx}
+                        style={{ padding: "2px 0", color: "#44ff44" }}
+                      >
+                        {user.name}
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: "#888" }}>No players in game</div>
                   )}
                 </div>
               </div>

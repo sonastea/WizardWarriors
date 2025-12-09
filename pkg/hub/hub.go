@@ -3,10 +3,20 @@ package hub
 import (
 	"context"
 	"fmt"
+	"log"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
 	"github.com/sonastea/WizardWarriors/pkg/config"
+	"google.golang.org/protobuf/proto"
+)
+
+// Redis keys for lobby state
+const (
+	RedisKeyLobbyUsers = "lobby:users"
+	RedisKeyGameUsers  = "game:users"
 )
 
 type Hub struct {
@@ -14,16 +24,18 @@ type Hub struct {
 	unregister chan *Client
 
 	// users     []models.User
-	clients map[*Client]bool
+	clientsMu sync.RWMutex
+	clients   map[*Client]bool
 	// rooms     map[*Room]bool
 	// roomsLive map[string]*Room
 
+	redis            *redis.Client
 	pubsub           *PubSub
 	gameStateManager *GameStateManager
 }
 
-func New(cfg *config.Config, stores *Stores, pool *redis.Client) (*Hub, error) {
-	pubsub, err := NewPubSub(cfg, stores, pool)
+func New(cfg *config.Config, stores *Stores) (*Hub, error) {
+	pubsub, err := NewPubSub(cfg, stores)
 	if err != nil {
 		return nil, err
 	}
@@ -34,8 +46,12 @@ func New(cfg *config.Config, stores *Stores, pool *redis.Client) (*Hub, error) {
 
 		clients: make(map[*Client]bool),
 
+		redis:  pubsub.conn,
 		pubsub: pubsub,
 	}
+
+	ctx := context.Background()
+	hub.redis.Del(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers)
 
 	// Initialize game state manager with 30ms tick rate (33 updates/sec)
 	hub.gameStateManager = NewGameStateManager(hub, 30*time.Millisecond)
@@ -62,19 +78,124 @@ func (hub *Hub) Run(ctx context.Context) {
 }
 
 func (hub *Hub) addClient(client *Client) {
+	hub.clientsMu.Lock()
 	hub.clients[client] = true
+	hub.clientsMu.Unlock()
+
+	// Add user to lobby set in Redis
+	ctx := context.Background()
+	if err := hub.redis.SAdd(ctx, RedisKeyLobbyUsers, client.playerId).Err(); err != nil {
+		log.Printf("Failed to add user to lobby in Redis: %v", err)
+	}
+
 	fmt.Println("Joined size of connection pool: ", len(hub.clients))
+	hub.broadcastLobbyState()
 }
 
 func (hub *Hub) removeClient(client *Client) {
+	hub.clientsMu.Lock()
 	if _, ok := hub.clients[client]; ok {
 		delete(hub.clients, client)
 		fmt.Println("Remaining size of connection pool: ", len(hub.clients))
 	}
+	hub.clientsMu.Unlock()
+
+	// Remove user from both lobby and game sets in Redis
+	ctx := context.Background()
+	if err := hub.redis.SRem(ctx, RedisKeyLobbyUsers, client.Xid).Err(); err != nil {
+		log.Printf("Failed to remove user from lobby in Redis: %v", err)
+	}
+	// Also remove by playerId if they joined the game
+	if client.playerId != "" {
+		if err := hub.redis.SRem(ctx, RedisKeyGameUsers, client.playerId).Err(); err != nil {
+			log.Printf("Failed to remove user from game in Redis: %v", err)
+		}
+	}
+
+	hub.broadcastLobbyState()
 }
 
 func (hub *Hub) broadcastToClients(message []byte) {
+	hub.clientsMu.RLock()
+	defer hub.clientsMu.RUnlock()
 	for client := range hub.clients {
 		client.sendChan <- message
 	}
+}
+
+// MoveUserToGame moves a user from the lobby set to the game set in Redis
+func (hub *Hub) MoveUserToGame(userId string) error {
+	ctx := context.Background()
+	pipe := hub.redis.Pipeline()
+	pipe.SRem(ctx, RedisKeyLobbyUsers, userId)
+	pipe.SAdd(ctx, RedisKeyGameUsers, userId)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// MoveUserToLobby moves a user from the game set back to the lobby set in Redis
+func (hub *Hub) MoveUserToLobby(userId string) error {
+	ctx := context.Background()
+	pipe := hub.redis.Pipeline()
+	pipe.SRem(ctx, RedisKeyGameUsers, userId)
+	pipe.SAdd(ctx, RedisKeyLobbyUsers, userId)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// broadcastLobbyState sends the current lobby and game user state to all clients
+func (hub *Hub) broadcastLobbyState() {
+	ctx := context.Background()
+
+	// Get lobby and game users from Redis
+	lobbyUserIds, err := hub.redis.SMembers(ctx, RedisKeyLobbyUsers).Result()
+	if err != nil {
+		log.Printf("Failed to get lobby users from Redis: %v", err)
+		return
+	}
+
+	gameUserIds, err := hub.redis.SMembers(ctx, RedisKeyGameUsers).Result()
+	if err != nil {
+		log.Printf("Failed to get game users from Redis: %v", err)
+		return
+	}
+
+	// Build lobby user list
+	lobbyUsers := make([]*multiplayerv1.LobbyUser, 0, len(lobbyUserIds))
+	for _, id := range lobbyUserIds {
+		lobbyUsers = append(lobbyUsers, &multiplayerv1.LobbyUser{
+			UserId:  &multiplayerv1.ID{Value: id},
+			Name:    id, // Using ID as name for now
+			IsReady: false,
+		})
+	}
+
+	// Build game user list
+	gameUsers := make([]*multiplayerv1.LobbyUser, 0, len(gameUserIds))
+	for _, id := range gameUserIds {
+		gameUsers = append(gameUsers, &multiplayerv1.LobbyUser{
+			UserId:  &multiplayerv1.ID{Value: id},
+			Name:    id, // Using ID as name for now
+			IsReady: true,
+		})
+	}
+
+	lobbyState := &multiplayerv1.LobbyState{
+		LobbyUsers: lobbyUsers,
+		GameUsers:  gameUsers,
+	}
+
+	gameMsg := &multiplayerv1.GameMessage{
+		Type: multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_LOBBY_STATE,
+		Payload: &multiplayerv1.GameMessage_LobbyState{
+			LobbyState: lobbyState,
+		},
+	}
+
+	wire, err := proto.Marshal(gameMsg)
+	if err != nil {
+		return
+	}
+
+	hub.broadcastToClients(wire)
 }

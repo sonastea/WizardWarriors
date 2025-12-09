@@ -30,7 +30,7 @@ type Client struct {
 	sync.RWMutex
 	Id       int    `json:"id,string,omitempty"`
 	Xid      string `json:"xid"`
-	Name     string `json:"name,omitempty"`
+	Username string `json:"username,omitempty"`
 	Email    string `json:"email,omitempty"`
 	Password string `json:"password,omitempty"`
 	conn     *websocket.Conn
@@ -45,8 +45,8 @@ func NewClient(hub *Hub, conn *websocket.Conn) error {
 	newId := shortuuid.New()
 	client := &Client{
 		Xid:      newId,
-		Name:     newId,
-		Email:    newId + "example.com",
+		Username: newId,
+		Email:    newId + "@example.com",
 		Password: "",
 		hub:      hub,
 		conn:     conn,
@@ -70,7 +70,7 @@ func (client *Client) GetXid() string {
 }
 
 func (client *Client) GetName() string {
-	return client.Name
+	return client.Username
 }
 
 func (client *Client) GetEmail() string {
@@ -107,7 +107,7 @@ func (client *Client) readPump() {
 				websocket.CloseNormalClosure) {
 				log.Printf("error: %v", err)
 			}
-			log.Printf("Client %s (%s) disconnected", client.Name, client.Xid)
+			log.Printf("Client %s (%s) disconnected", client.Username, client.Xid)
 
 			// Handle player leaving - notify game state
 			if client.playerId != "" {
