@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type GameStats struct {
-	ID                 uint64    `json:"id"`
+	ID                 uint64    `json:"game_id"`
 	Username           string    `json:"username"`
 	UserID             uint64    `json:"user_id"`
 	TeamDeaths         int       `json:"team_deaths"`

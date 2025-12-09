@@ -57,6 +57,8 @@ export class Game extends Scene {
   /**
    * Spawn entities in batches to prevent browser lockup
    * Spreads expensive spawning operations across multiple frames
+   * Note: This is used for loading saved games - it does NOT increment stats
+   * since the stats are already set from the save data
    */
   private batchSpawnEntities(totalAllies: number, totalEnemies: number): void {
     const BATCH_SIZE = 10;
@@ -66,7 +68,7 @@ export class Game extends Scene {
     const spawnBatch = () => {
       const alliesToSpawn = Math.min(BATCH_SIZE, totalAllies - alliesSpawned);
       for (let i = 0; i < alliesToSpawn; i++) {
-        this.spawnAlly();
+        this.spawnEntityWithoutStats(Ally, ENTITY.ALLY, this.allies);
         alliesSpawned++;
       }
 
@@ -75,7 +77,7 @@ export class Game extends Scene {
         totalEnemies - enemiesSpawned
       );
       for (let i = 0; i < enemiesToSpawn; i++) {
-        this.spawnEnemy();
+        this.spawnEntityWithoutStats(Slime, ENTITY.ENEMY.SLIME, this.enemies);
         enemiesSpawned++;
       }
 
@@ -92,6 +94,23 @@ export class Game extends Scene {
   }
 
   private spawnEntity<T extends Phaser.GameObjects.Sprite>(
+    entityClass: new (
+      scene: GameScene,
+      x: number,
+      y: number,
+      type: string
+    ) => T,
+    entityType: string,
+    group: Phaser.Physics.Arcade.Group
+  ): void {
+    this.spawnEntityWithoutStats(entityClass, entityType, group);
+  }
+
+  /**
+   * Spawns an entity without updating game stats.
+   * Used when loading saved games where stats are already set.
+   */
+  private spawnEntityWithoutStats<T extends Phaser.GameObjects.Sprite>(
     entityClass: new (
       scene: GameScene,
       x: number,
