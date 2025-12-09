@@ -14,6 +14,7 @@ import Enemy from "../entity/enemy";
 import Slime from "../entity/slime";
 import { Game as GameScene } from "../scenes/Game";
 import Fireball from "../entity/fireball";
+import { Minimap } from "../ui/Minimap";
 
 export class Game extends Scene {
   player: Player | null;
@@ -35,6 +36,7 @@ export class Game extends Scene {
 
   private allySpawnTimer?: Phaser.Time.TimerEvent;
   private enemySpawnTimer?: Phaser.Time.TimerEvent;
+  private minimap: Minimap | null = null;
 
   chatBox: Phaser.GameObjects.Container | null = null;
 
@@ -189,6 +191,9 @@ export class Game extends Scene {
 
     this.player = null;
 
+    this.minimap?.destroy();
+    this.minimap = null;
+
     this.scene.stop();
     this.scene.start(CONSTANTS.SCENES.GAME_OVER);
   }
@@ -283,6 +288,14 @@ export class Game extends Scene {
       groundLayer.setVisible(true);
       this.elevationLayer.setVisible(true);
       this.collisionLayer.setVisible(true);
+
+      // Create minimap in the top-right corner
+      this.minimap = new Minimap(this, {
+        worldWidth: mapWidth,
+        worldHeight: mapHeight,
+        width: 150,
+        height: 85, // Match the map aspect ratio (80:45 tiles)
+      });
     }
 
     this.input?.keyboard?.on("keydown-ESC", () => {
@@ -396,5 +409,10 @@ export class Game extends Scene {
 
   update(time: number, delta: number) {
     this.player?.update(time, delta);
+
+    // Update minimap with player position
+    if (this.minimap && this.player) {
+      this.minimap.update(this.player.x, this.player.y);
+    }
   }
 }

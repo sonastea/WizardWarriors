@@ -1,6 +1,7 @@
 import { GameObjects, Scene } from "phaser";
 import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
+import { Minimap } from "../ui/Minimap";
 
 // These must match server constants
 const MAP_WIDTH = 2000;
@@ -20,6 +21,7 @@ export default class MultiplayerGameScene extends Scene {
   private localPlayer: GameObjects.Arc | null = null;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private localPlayerId: string | null = null;
+  private minimap: Minimap | null = null;
   
   // Track last input state to detect changes
   private lastInputState: InputState = {
@@ -62,6 +64,13 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.on("multiplayer-player-left", this.handlePlayerLeft, this);
 
     EventBus.emit("send-player-join");
+
+    this.minimap = new Minimap(this, {
+      worldWidth: MAP_WIDTH,
+      worldHeight: MAP_HEIGHT,
+      width: 150,
+      height: 150,
+    });
 
     EventBus?.emit("current-scene-ready", this);
   }
@@ -115,6 +124,10 @@ export default class MultiplayerGameScene extends Scene {
     if (currentInput.moveRight !== this.lastInputState.moveRight) {
       EventBus.emit("send-input-change", { input: "moveRight", pressed: currentInput.moveRight });
       this.lastInputState.moveRight = currentInput.moveRight;
+    }
+
+    if (this.minimap && this.localPlayer.visible) {
+      this.minimap.update(this.localPlayer.x, this.localPlayer.y);
     }
   }
 
@@ -191,6 +204,9 @@ export default class MultiplayerGameScene extends Scene {
     }).setOrigin(0.5);
     
     player.setData("label", label);
+
+    // Add player to minimap
+    this.minimap?.updateOtherPlayer(data.playerId, data.x, data.y);
   }
 
   handlePlayerLeft(data: { playerId: string }) {
@@ -201,6 +217,9 @@ export default class MultiplayerGameScene extends Scene {
       player.destroy();
       this.players.delete(data.playerId);
     }
+
+    // Remove player from minimap
+    this.minimap?.removeOtherPlayer(data.playerId);
   }
 
   updateRemotePlayer(playerId: string, x: number, y: number) {
@@ -216,6 +235,9 @@ export default class MultiplayerGameScene extends Scene {
         label.x = player.x;
         label.y = player.y - 30;
       }
+
+      // Update player on minimap
+      this.minimap?.updateOtherPlayer(playerId, player.x, player.y);
     }
   }
 
@@ -228,5 +250,8 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.removeListener("multiplayer-player-joined");
     EventBus.removeListener("multiplayer-player-left");
     EventBus.removeListener("set-local-player-id");
+    
+    this.minimap?.destroy();
+    this.minimap = null;
   }
 }
