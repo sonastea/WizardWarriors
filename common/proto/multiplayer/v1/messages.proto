@@ -31,8 +31,9 @@ enum GameMessageType {
 // Chat from a player
 message ChatMessage {
   ID sender_id = 1;
-  string text  = 2;
-  int64 sent_at_unix = 3;
+  string sender_name = 2;
+  string text  = 3;
+  int64 sent_at_unix = 4;
 }
 
 // Server announcements (join/leave/system messages)

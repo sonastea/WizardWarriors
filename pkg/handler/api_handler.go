@@ -39,7 +39,7 @@ type UserCredentials struct {
 }
 
 type PlayerSaveRequest struct {
-	GameID int `json:"game_id"`
+	GameID uint64 `json:"game_id"`
 }
 
 func errorResponse(err string) APIResponse {
@@ -84,7 +84,7 @@ func isProduction() bool {
 	return os.Getenv("ENV") == "production"
 }
 
-func (h *ApiHandler) setUserCookie(w http.ResponseWriter, r *http.Request, userID int) {
+func (h *ApiHandler) setUserCookie(w http.ResponseWriter, r *http.Request, userID uint64) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "ww-userId",
 		Value:    fmt.Sprintf("%d", userID),
@@ -132,7 +132,7 @@ func (h *ApiHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	h.setUserCookie(w, r, userID)
 
-	writeJSON(w, http.StatusCreated, successResponse(map[string]int{"id": userID}))
+	writeJSON(w, http.StatusCreated, successResponse(map[string]uint64{"id": userID}))
 }
 
 // Login handles user authentication
@@ -191,7 +191,7 @@ func (h *ApiHandler) GetPlayerSaves(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.Atoi(cookie.Value)
+	userID, err := strconv.ParseUint(cookie.Value, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid authentication cookie"))
 		return
@@ -267,7 +267,7 @@ func (h *ApiHandler) SaveGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.Atoi(cookie.Value)
+	userID, err := strconv.ParseUint(cookie.Value, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid authentication cookie"))
 		return
@@ -314,7 +314,7 @@ func (h *ApiHandler) JoinMultiplayer(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResponse("Error retrieving authentication"))
 	}
 
-	userID, err := strconv.Atoi(cookie.Value)
+	userID, err := strconv.ParseUint(cookie.Value, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse("Error processing your request."))
 	}
@@ -345,7 +345,7 @@ func (h *ApiHandler) ValidateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.Atoi(cookie.Value)
+	userID, err := strconv.ParseUint(cookie.Value, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse("Invalid authentication cookie"))
 		return

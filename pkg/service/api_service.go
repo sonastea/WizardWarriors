@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/sonastea/WizardWarriors/pkg/entity"
@@ -12,20 +11,20 @@ import (
 
 // UserInfo represents basic user information for session validation
 type UserInfo struct {
-	ID       uint   `json:"id"`
+	ID       uint64 `json:"id"`
 	Username string `json:"username"`
 }
 
 // ApiService defines the interface for API business logic (users and games)
 type ApiService interface {
-	Register(ctx context.Context, username, password string) (int, error)
-	Login(ctx context.Context, username, password string) (int, error)
-	ValidateSession(ctx context.Context, userID int) (*UserInfo, error)
-	JoinMultiplayer(ctx context.Context, userID int) (*map[string]repository.GameSessionToken, error)
-	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
-	GetPlayerSaves(ctx context.Context, userID int) ([]entity.PlayerSave, error)
+	Register(ctx context.Context, username, password string) (uint64, error)
+	Login(ctx context.Context, username, password string) (uint64, error)
+	ValidateSession(ctx context.Context, userID uint64) (*UserInfo, error)
+	JoinMultiplayer(ctx context.Context, userID uint64) (*map[string]repository.GameSessionToken, error)
+	GetPlayerSave(ctx context.Context, gameID uint64) (*entity.PlayerSave, error)
+	GetPlayerSaves(ctx context.Context, userID uint64) ([]entity.PlayerSave, error)
 	GetLeaderboard(ctx context.Context) ([]entity.GameStats, error)
-	SaveGame(ctx context.Context, userID int, gameStats *entity.GameStats) (*entity.GameStats, error)
+	SaveGame(ctx context.Context, userID uint64, gameStats *entity.GameStats) (*entity.GameStats, error)
 }
 
 // apiService implements ApiService
@@ -43,7 +42,7 @@ func NewApiService(userRepo repository.UserRepository, gameRepo repository.GameR
 }
 
 // Register creates a new user account
-func (s *apiService) Register(ctx context.Context, username, password string) (int, error) {
+func (s *apiService) Register(ctx context.Context, username, password string) (uint64, error) {
 	// Validate input
 	if strings.TrimSpace(username) == "" {
 		return 0, fmt.Errorf("username cannot be empty")
@@ -71,7 +70,7 @@ func (s *apiService) Register(ctx context.Context, username, password string) (i
 }
 
 // Login authenticates a user and returns their user ID
-func (s *apiService) Login(ctx context.Context, username, password string) (int, error) {
+func (s *apiService) Login(ctx context.Context, username, password string) (uint64, error) {
 	// Validate input
 	if strings.TrimSpace(username) == "" {
 		return 0, fmt.Errorf("username cannot be empty")
@@ -90,11 +89,11 @@ func (s *apiService) Login(ctx context.Context, username, password string) (int,
 		return 0, fmt.Errorf("user account is inactive")
 	}
 
-	return int(user.ID), nil
+	return user.ID, nil
 }
 
 // GetPlayerSave retrieves a player save by game ID
-func (s *apiService) GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error) {
+func (s *apiService) GetPlayerSave(ctx context.Context, gameID uint64) (*entity.PlayerSave, error) {
 	if gameID <= 0 {
 		return nil, fmt.Errorf("invalid game ID")
 	}
@@ -108,7 +107,7 @@ func (s *apiService) GetPlayerSave(ctx context.Context, gameID int) (*entity.Pla
 }
 
 // GetPlayerSaves retrieves all player saves for a user
-func (s *apiService) GetPlayerSaves(ctx context.Context, userID int) ([]entity.PlayerSave, error) {
+func (s *apiService) GetPlayerSaves(ctx context.Context, userID uint64) ([]entity.PlayerSave, error) {
 	if userID <= 0 {
 		return nil, fmt.Errorf("invalid user ID")
 	}
@@ -132,7 +131,7 @@ func (s *apiService) GetLeaderboard(ctx context.Context) ([]entity.GameStats, er
 }
 
 // SaveGame saves or updates a game stats entry
-func (s *apiService) SaveGame(ctx context.Context, userID int, gameStats *entity.GameStats) (*entity.GameStats, error) {
+func (s *apiService) SaveGame(ctx context.Context, userID uint64, gameStats *entity.GameStats) (*entity.GameStats, error) {
 	// Validate user owns this game
 	if gameStats.UserID != userID {
 		return nil, fmt.Errorf("unauthorized: user does not own this game")
@@ -153,7 +152,7 @@ func (s *apiService) SaveGame(ctx context.Context, userID int, gameStats *entity
 }
 
 // ValidateSession validates a user session and returns user info
-func (s *apiService) ValidateSession(ctx context.Context, userID int) (*UserInfo, error) {
+func (s *apiService) ValidateSession(ctx context.Context, userID uint64) (*UserInfo, error) {
 	if userID <= 0 {
 		return nil, fmt.Errorf("invalid user ID")
 	}
@@ -173,13 +172,13 @@ func (s *apiService) ValidateSession(ctx context.Context, userID int) (*UserInfo
 	}, nil
 }
 
-func (s *apiService) JoinMultiplayer(ctx context.Context, userID int) (*map[string]repository.GameSessionToken, error) {
+func (s *apiService) JoinMultiplayer(ctx context.Context, userID uint64) (*map[string]repository.GameSessionToken, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user")
 	}
 
-	token, err := s.gameRepo.JoinMultiplayer(ctx, strconv.FormatUint(uint64(user.ID), 10))
+	token, err := s.gameRepo.JoinMultiplayer(ctx, user.ID, user.Username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect user to multiplayer")
 	}

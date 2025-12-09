@@ -92,10 +92,17 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 							switch playerEvent.Type {
 							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_JOIN:
 								if playerEvent.PlayerId != nil {
+									// Look up the username from Redis
+									playerId := playerEvent.PlayerId.Value
+									username, err := hub.redis.HGet(context.Background(), "lobby:usernames", playerId).Result()
+									if err != nil || username == "" {
+										username = "Unknown"
+									}
+
 									// Server generates spawn position (ignores client suggestion)
 									hub.gameStateManager.AddPlayer(
-										playerEvent.PlayerId.Value,
-										playerEvent.PlayerId.Value, // Using ID as username for now
+										playerId,
+										username,
 									)
 
 									// Move user from lobby to game in Redis

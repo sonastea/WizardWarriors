@@ -77,12 +77,17 @@ export declare type ChatMessage = Message<"multiplayer.v1.ChatMessage"> & {
   senderId?: ID;
 
   /**
-   * @generated from field: string text = 2;
+   * @generated from field: string sender_name = 2;
+   */
+  senderName: string;
+
+  /**
+   * @generated from field: string text = 3;
    */
   text: string;
 
   /**
-   * @generated from field: int64 sent_at_unix = 3;
+   * @generated from field: int64 sent_at_unix = 4;
    */
   sentAtUnix: bigint;
 };

@@ -83,10 +83,6 @@ const MultiplayerPhaserGame = ({
   const [lobbyUsers, setLobbyUsers] = useState<LobbyUserDisplay[]>([]);
   const [gameUsers, setGameUsers] = useState<LobbyUserDisplay[]>([]);
 
-  const playerIdRef = useRef<string>(
-    `${gameStats.user_id}-${Math.random().toString(36).substr(2, 6)}`
-  );
-
   useEffect(() => {
     if (token && !isConnected && !isConnecting) {
       connect(token);
@@ -108,7 +104,7 @@ const MultiplayerPhaserGame = ({
               setChatMessages((prev) => [
                 ...prev,
                 {
-                  username: chatMsg.senderId?.value || "Unknown",
+                  username: chatMsg.senderName || "Unknown",
                   message: chatMsg.text,
                   timestamp: Number(chatMsg.sentAtUnix),
                 },
@@ -251,7 +247,7 @@ const MultiplayerPhaserGame = ({
 
       const playerEvent = create(PlayerEventSchema, {
         type: PlayerEventType.INPUT,
-        playerId: { value: playerIdRef.current },
+        playerId: { value: gameStats.user_id.toString() },
         inputAction: create(InputActionSchema, {
           input: inputType,
           pressed: data.pressed,
@@ -272,11 +268,11 @@ const MultiplayerPhaserGame = ({
     const handleSendJoin = () => {
       if (!ws || !isConnected) return;
 
-      EventBus.emit("set-local-player-id", { playerId: playerIdRef.current });
+      EventBus.emit("set-local-player-id", { playerId: gameStats.user_id.toString() });
 
       const playerEvent = create(PlayerEventSchema, {
         type: PlayerEventType.JOIN,
-        playerId: { value: playerIdRef.current },
+        playerId: { value: gameStats.user_id.toString() },
       });
 
       const message = create(GameMessageSchema, {
@@ -308,7 +304,7 @@ const MultiplayerPhaserGame = ({
 
     const playerEvent = create(PlayerEventSchema, {
       type: PlayerEventType.READY,
-      playerId: { value: playerIdRef.current },
+      playerId: { value: gameStats.user_id.toString() },
     });
 
     const message = create(GameMessageSchema, {

@@ -223,8 +223,9 @@ func (*GameMessage_LobbyState) isGameMessage_Payload() {}
 type ChatMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SenderId      *ID                    `protobuf:"bytes,1,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
-	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
-	SentAtUnix    int64                  `protobuf:"varint,3,opt,name=sent_at_unix,json=sentAtUnix,proto3" json:"sent_at_unix,omitempty"`
+	SenderName    string                 `protobuf:"bytes,2,opt,name=sender_name,json=senderName,proto3" json:"sender_name,omitempty"`
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	SentAtUnix    int64                  `protobuf:"varint,4,opt,name=sent_at_unix,json=sentAtUnix,proto3" json:"sent_at_unix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -264,6 +265,13 @@ func (x *ChatMessage) GetSenderId() *ID {
 		return x.SenderId
 	}
 	return nil
+}
+
+func (x *ChatMessage) GetSenderName() string {
+	if x != nil {
+		return x.SenderName
+	}
+	return ""
 }
 
 func (x *ChatMessage) GetText() string {
@@ -559,11 +567,13 @@ const file_multiplayer_v1_messages_proto_rawDesc = "" +
 	"\x11chat_announcement\x18\x05 \x01(\v2\x1c.multiplayer.v1.AnnouncementH\x00R\x10chatAnnouncement\x12=\n" +
 	"\vlobby_state\x18\x06 \x01(\v2\x1a.multiplayer.v1.LobbyStateH\x00R\n" +
 	"lobbyStateB\t\n" +
-	"\apayload\"t\n" +
+	"\apayload\"\x95\x01\n" +
 	"\vChatMessage\x12/\n" +
-	"\tsender_id\x18\x01 \x01(\v2\x12.multiplayer.v1.IDR\bsenderId\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\x12 \n" +
-	"\fsent_at_unix\x18\x03 \x01(\x03R\n" +
+	"\tsender_id\x18\x01 \x01(\v2\x12.multiplayer.v1.IDR\bsenderId\x12\x1f\n" +
+	"\vsender_name\x18\x02 \x01(\tR\n" +
+	"senderName\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12 \n" +
+	"\fsent_at_unix\x18\x04 \x01(\x03R\n" +
 	"sentAtUnix\"D\n" +
 	"\fAnnouncement\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12 \n" +

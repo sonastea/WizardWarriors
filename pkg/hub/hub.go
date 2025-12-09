@@ -51,7 +51,7 @@ func New(cfg *config.Config, stores *Stores) (*Hub, error) {
 	}
 
 	ctx := context.Background()
-	hub.redis.Del(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers)
+	hub.redis.Del(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers, "lobby:usernames")
 
 	// Initialize game state manager with 30ms tick rate (33 updates/sec)
 	hub.gameStateManager = NewGameStateManager(hub, 30*time.Millisecond)
@@ -82,10 +82,15 @@ func (hub *Hub) addClient(client *Client) {
 	hub.clients[client] = true
 	hub.clientsMu.Unlock()
 
-	// Add user to lobby set in Redis
+	// Add user to lobby set in Redis using Xid (userID)
 	ctx := context.Background()
-	if err := hub.redis.SAdd(ctx, RedisKeyLobbyUsers, client.playerId).Err(); err != nil {
+	if err := hub.redis.SAdd(ctx, RedisKeyLobbyUsers, client.Xid).Err(); err != nil {
 		log.Printf("Failed to add user to lobby in Redis: %v", err)
+	}
+
+	// Store the username mapping in Redis so we can look it up later
+	if err := hub.redis.HSet(ctx, "lobby:usernames", client.Xid, client.Username).Err(); err != nil {
+		log.Printf("Failed to store username in Redis: %v", err)
 	}
 
 	fmt.Println("Joined size of connection pool: ", len(hub.clients))
@@ -105,6 +110,10 @@ func (hub *Hub) removeClient(client *Client) {
 	if err := hub.redis.SRem(ctx, RedisKeyLobbyUsers, client.Xid).Err(); err != nil {
 		log.Printf("Failed to remove user from lobby in Redis: %v", err)
 	}
+	// Remove username mapping
+	if err := hub.redis.HDel(ctx, "lobby:usernames", client.Xid).Err(); err != nil {
+		log.Printf("Failed to remove username from Redis: %v", err)
+	}
 	// Also remove by playerId if they joined the game
 	if client.playerId != "" {
 		if err := hub.redis.SRem(ctx, RedisKeyGameUsers, client.playerId).Err(); err != nil {
@@ -121,6 +130,30 @@ func (hub *Hub) broadcastToClients(message []byte) {
 	for client := range hub.clients {
 		client.sendChan <- message
 	}
+}
+
+// SessionInfo contains user information associated with a game session
+type SessionInfo struct {
+	UserID   string
+	Username string
+}
+
+// GetSessionInfo retrieves user information from a game session token
+func (hub *Hub) GetSessionInfo(token string) (*SessionInfo, error) {
+	ctx := context.Background()
+	result, err := hub.redis.HGetAll(ctx, "gamesession:token:"+token).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session info: %w", err)
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("session not found or expired")
+	}
+
+	return &SessionInfo{
+		UserID:   result["user_id"],
+		Username: result["username"],
+	}, nil
 }
 
 // MoveUserToGame moves a user from the lobby set to the game set in Redis
@@ -160,12 +193,23 @@ func (hub *Hub) broadcastLobbyState() {
 		return
 	}
 
+	// Get username mappings from Redis
+	usernames, err := hub.redis.HGetAll(ctx, "lobby:usernames").Result()
+	if err != nil {
+		log.Printf("Failed to get usernames from Redis: %v", err)
+		usernames = make(map[string]string)
+	}
+
 	// Build lobby user list
 	lobbyUsers := make([]*multiplayerv1.LobbyUser, 0, len(lobbyUserIds))
 	for _, id := range lobbyUserIds {
+		username := usernames[id]
+		if username == "" {
+			username = "Unknown"
+		}
 		lobbyUsers = append(lobbyUsers, &multiplayerv1.LobbyUser{
 			UserId:  &multiplayerv1.ID{Value: id},
-			Name:    id, // Using ID as name for now
+			Name:    username,
 			IsReady: false,
 		})
 	}
@@ -173,9 +217,13 @@ func (hub *Hub) broadcastLobbyState() {
 	// Build game user list
 	gameUsers := make([]*multiplayerv1.LobbyUser, 0, len(gameUserIds))
 	for _, id := range gameUserIds {
+		username := usernames[id]
+		if username == "" {
+			username = "Unknown"
+		}
 		gameUsers = append(gameUsers, &multiplayerv1.LobbyUser{
 			UserId:  &multiplayerv1.ID{Value: id},
-			Name:    id, // Using ID as name for now
+			Name:    username,
 			IsReady: true,
 		})
 	}

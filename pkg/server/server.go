@@ -82,7 +82,9 @@ func WithWebSocket(path string, upgrader websocket.Upgrader) Option {
 				return
 			}
 
-			err = hub.NewClient(s.hub, conn)
+			token := r.URL.Query().Get("token")
+
+			err = hub.NewClient(s.hub, conn, token)
 			if err != nil {
 				log.Println(err)
 				return

@@ -14,9 +14,16 @@ import (
 
 type GameSessionToken string
 
+// GameSessionInfo contains user information associated with a game session
+type GameSessionInfo struct {
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+}
+
 // GameRepository defines the interface for game storage operations
 type GameRepository interface {
-	JoinMultiplayer(ctx context.Context, userID string) (GameSessionToken, error)
+	JoinMultiplayer(ctx context.Context, userID uint64, username string) (GameSessionToken, error)
+	GetSessionInfo(ctx context.Context, token string) (*GameSessionInfo, error)
 	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
 	GetPlayerSavesByUserID(ctx context.Context, userID int) ([]entity.PlayerSave, error)
 	GetLeaderboard(ctx context.Context) ([]entity.GameStats, error)
@@ -319,10 +326,10 @@ func (r *gameRepository) SaveGame(ctx context.Context, gameStats *entity.GameSta
 }
 
 // JoinMultiplayer handles authenticating the user and returns a GameSessionToken
-func (r *gameRepository) JoinMultiplayer(ctx context.Context, userID string) (GameSessionToken, error) {
+func (r *gameRepository) JoinMultiplayer(ctx context.Context, userID uint64, username string) (GameSessionToken, error) {
 	// some function that will be called to do the following
 	// 1. generate and retrieve the token for the user
-	// 2. save to redis cache: userId:token
+	// 2. save to redis cache: token -> {userID, username}
 	// gen token (len = 32)
 	len := 32
 	b := make([]byte, len)
@@ -332,8 +339,32 @@ func (r *gameRepository) JoinMultiplayer(ctx context.Context, userID string) (Ga
 	}
 	token := hex.EncodeToString(b)
 
-	// save to redis
-	r.redis.SetEx(ctx, "gamesession:"+userID, token, 30*time.Minute)
+	// save to redis with token as key (so we can look up user info from token)
+	// Store userID and username as a hash
+	pipe := r.redis.Pipeline()
+	pipe.HSet(ctx, "gamesession:token:"+token, "user_id", userID, "username", username)
+	pipe.Expire(ctx, "gamesession:token:"+token, 30*time.Minute)
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to store session: %w", err)
+	}
 
 	return GameSessionToken(token), nil
+}
+
+// GetSessionInfo retrieves user information from a game session token
+func (r *gameRepository) GetSessionInfo(ctx context.Context, token string) (*GameSessionInfo, error) {
+	result, err := r.redis.HGetAll(ctx, "gamesession:token:"+token).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session info: %w", err)
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("session not found or expired")
+	}
+
+	return &GameSessionInfo{
+		UserID:   result["user_id"],
+		Username: result["username"],
+	}, nil
 }

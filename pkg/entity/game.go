@@ -3,9 +3,9 @@ package entity
 import "time"
 
 type GameStats struct {
-	ID                 int       `json:"id"`
+	ID                 uint64    `json:"id"`
 	Username           string    `json:"username"`
-	UserID             int       `json:"user_id"`
+	UserID             uint64    `json:"user_id"`
 	TeamDeaths         int       `json:"team_deaths"`
 	TeamKills          int       `json:"team_kills"`
 	PlayerLevel        int       `json:"player_level"`
@@ -19,8 +19,8 @@ type GameStats struct {
 }
 
 type PlayerSave struct {
-	ID                 int       `json:"id"`
-	UserID             int       `json:"user_id"`
+	ID                 uint64    `json:"id"`
+	UserID             uint64    `json:"user_id"`
 	MaxLevel           int       `json:"max_level"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`

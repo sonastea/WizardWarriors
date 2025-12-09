@@ -11,9 +11,9 @@ import (
 
 // UserRepository defines the interface for user storage operations
 type UserRepository interface {
-	Create(ctx context.Context, username, password string) (int, error)
+	Create(ctx context.Context, username, password string) (uint64, error)
 	GetByCredentials(ctx context.Context, username, password string) (*entity.User, error)
-	GetByID(ctx context.Context, userID int) (*entity.User, error)
+	GetByID(ctx context.Context, userID uint64) (*entity.User, error)
 }
 
 // userRepository implements UserRepository with postgresql pooling
@@ -28,12 +28,12 @@ func NewUserRepository(pool *pgxpool.Pool, redis *redis.Client) UserRepository {
 }
 
 // Create adds a new user and returns the user id
-func (r *userRepository) Create(ctx context.Context, username, password string) (int, error) {
+func (r *userRepository) Create(ctx context.Context, username, password string) (uint64, error) {
 	query := `
 		INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id;
 	`
 
-	var userID int
+	var userID uint64
 	err := r.pool.QueryRow(ctx, query, username, password).Scan(&userID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create user: %w", err)
@@ -43,7 +43,7 @@ func (r *userRepository) Create(ctx context.Context, username, password string) 
 }
 
 // GetPlayerByID retrieves a user by their user id (not uuid)
-func (r *userRepository) GetPlayerByID(ctx context.Context, userID int) (*entity.User, error) {
+func (r *userRepository) GetPlayerByID(ctx context.Context, userID uint64) (*entity.User, error) {
 	query := `
 		SELECT id, username, created_at, updated_at, is_active
 		FROM users
@@ -90,7 +90,7 @@ func (r *userRepository) GetByCredentials(ctx context.Context, username, passwor
 }
 
 // GetByID retrieves a user by ID
-func (r *userRepository) GetByID(ctx context.Context, userID int) (*entity.User, error) {
+func (r *userRepository) GetByID(ctx context.Context, userID uint64) (*entity.User, error) {
 	query := `
 		SELECT id, username, password, created_at, updated_at, is_active
 		FROM users

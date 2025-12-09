@@ -41,12 +41,26 @@ type Client struct {
 	playerId string
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn) error {
+func NewClient(hub *Hub, conn *websocket.Conn, token string) error {
 	newId := shortuuid.New()
+	username := "Unknown"
+	userIdStr := newId
+
+	// Look up user info from token if provided
+	if token != "" {
+		sessionInfo, err := hub.GetSessionInfo(token)
+		if err == nil && sessionInfo != nil {
+			userIdStr = sessionInfo.UserID
+			username = sessionInfo.Username
+		} else {
+			log.Printf("Failed to get session info for token: %v", err)
+		}
+	}
+
 	client := &Client{
-		Xid:      newId,
-		Username: newId,
-		Email:    newId + "@example.com",
+		Xid:      userIdStr,
+		Username: username,
+		Email:    userIdStr + "@example.com",
 		Password: "",
 		hub:      hub,
 		conn:     conn,
@@ -120,6 +134,9 @@ func (client *Client) readPump() {
 		// This helps us associate the client with their in-game player
 		client.extractPlayerIdFromMessage(message)
 
+		// Inject sender info into chat messages before publishing
+		message = client.injectSenderInfo(message)
+
 		client.hub.pubsub.conn.Publish(context.Background(), "chat.lobby", message)
 	}
 }
@@ -137,6 +154,33 @@ func (client *Client) extractPlayerIdFromMessage(message []byte) {
 			client.playerId = playerEvent.PlayerId.Value
 		}
 	}
+}
+
+// injectSenderInfo adds sender ID and username to chat messages
+func (client *Client) injectSenderInfo(message []byte) []byte {
+	gameMsg := &multiplayerv1.GameMessage{}
+	if err := proto.Unmarshal(message, gameMsg); err != nil {
+		return message
+	}
+
+	// Only inject sender info for chat messages
+	if gameMsg.Type == multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_CHAT_MESSAGE {
+		if chatMsg := gameMsg.GetChatMessage(); chatMsg != nil {
+			// Set sender ID and name from client info
+			chatMsg.SenderId = &multiplayerv1.ID{Value: client.Xid}
+			chatMsg.SenderName = client.Username
+
+			// Re-marshal the modified message
+			modified, err := proto.Marshal(gameMsg)
+			if err != nil {
+				log.Printf("Failed to marshal modified chat message: %v", err)
+				return message
+			}
+			return modified
+		}
+	}
+
+	return message
 }
 
 func (client *Client) writePump() {

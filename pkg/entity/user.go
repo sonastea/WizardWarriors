@@ -8,7 +8,7 @@ import (
 type User struct {
 	sync.RWMutex
 
-	ID uint `json:"id"`
+	ID uint64 `json:"id"`
 
 	UUID      string    `json:"uuid"`
 	Username  string    `json:"username"`
