@@ -26,7 +26,7 @@ export interface UserResponse {
 }
 
 export interface GameStatsResponse {
-  id: number;
+  game_id: number;
   username: string;
   user_id: number;
   team_deaths: number;

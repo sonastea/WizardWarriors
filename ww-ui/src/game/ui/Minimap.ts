@@ -1,4 +1,10 @@
 import { GameObjects, Scene } from "phaser";
+import { TERRAIN_TILES } from "../entity/entity";
+
+const TERRAIN_COLORS = {
+  WATER: 0x3498db,
+  SLOWDOWN: 0x967969,
+};
 
 interface MinimapConfig {
   /** Width of the minimap in pixels */
@@ -49,6 +55,7 @@ export class Minimap {
   private container: GameObjects.Container;
   private background: GameObjects.Rectangle;
   private border: GameObjects.Graphics;
+  private terrainGraphics: GameObjects.Graphics;
   private playerIndicator: GameObjects.Arc;
   private viewportIndicator: GameObjects.Rectangle;
   private otherPlayersIndicators: Map<string, GameObjects.Arc> = new Map();
@@ -66,6 +73,7 @@ export class Minimap {
 
     this.container = this.createContainer();
     this.background = this.createBackground();
+    this.terrainGraphics = this.createTerrainGraphics();
     this.border = this.createBorder();
     this.viewportIndicator = this.createViewportIndicator();
     this.playerIndicator = this.createPlayerIndicator();
@@ -73,6 +81,7 @@ export class Minimap {
     // Add elements to container in correct order (background first, player on top)
     this.container.add([
       this.background,
+      this.terrainGraphics,
       this.border,
       this.viewportIndicator,
       this.playerIndicator,
@@ -104,6 +113,10 @@ export class Minimap {
     );
     bg.setOrigin(0, 0);
     return bg;
+  }
+
+  private createTerrainGraphics(): GameObjects.Graphics {
+    return this.scene.add.graphics();
   }
 
   private createBorder(): GameObjects.Graphics {
@@ -200,6 +213,63 @@ export class Minimap {
     if (indicator) {
       indicator.destroy();
       this.otherPlayersIndicators.delete(playerId);
+    }
+  }
+
+  /**
+   * Render terrain tiles from a tilemap layer onto the minimap
+   * Call this once after creating the minimap to draw terrain features
+   */
+  renderTerrain(terrainLayer: Phaser.Tilemaps.TilemapLayer | null): void {
+    if (!terrainLayer) return;
+
+    this.terrainGraphics.clear();
+
+    const tileWidth = terrainLayer.tilemap.tileWidth;
+    const tileHeight = terrainLayer.tilemap.tileHeight;
+    const minimapTileWidth = tileWidth * this.scaleX;
+    const minimapTileHeight = tileHeight * this.scaleY;
+
+    terrainLayer.forEachTile((tile) => {
+      if (tile.index <= 0) return;
+
+      let color: number | null = null;
+
+      if (TERRAIN_TILES.WATER.includes(tile.index)) {
+        color = TERRAIN_COLORS.WATER;
+      } else if (TERRAIN_TILES.SLOWDOWN.includes(tile.index)) {
+        color = TERRAIN_COLORS.SLOWDOWN;
+      }
+
+      if (color !== null) {
+        const minimapX = tile.pixelX * this.scaleX;
+        const minimapY = tile.pixelY * this.scaleY;
+
+        this.terrainGraphics.fillStyle(color, 0.8);
+        this.terrainGraphics.fillRect(
+          minimapX,
+          minimapY,
+          minimapTileWidth,
+          minimapTileHeight
+        );
+      }
+    });
+  }
+
+  /**
+   * Render terrain zones directly (for multiplayer maps without tilemaps)
+   */
+  renderTerrainZones(zones: { x: number; y: number; width: number; height: number; color: number }[]): void {
+    this.terrainGraphics.clear();
+
+    for (const zone of zones) {
+      const minimapX = zone.x * this.scaleX;
+      const minimapY = zone.y * this.scaleY;
+      const minimapWidth = zone.width * this.scaleX;
+      const minimapHeight = zone.height * this.scaleY;
+
+      this.terrainGraphics.fillStyle(zone.color, 0.8);
+      this.terrainGraphics.fillRect(minimapX, minimapY, minimapWidth, minimapHeight);
     }
   }
 

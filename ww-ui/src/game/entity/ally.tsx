@@ -21,7 +21,7 @@ export default class Ally extends Entity {
 
     this.level = 1;
     this.health = 100;
-    this.speed = 100;
+    this.baseSpeed = 100;
     this.attack = 2;
 
     this.scene = scene;

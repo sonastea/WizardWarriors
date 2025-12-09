@@ -137,7 +137,10 @@ const PlayerForm = ({
   });
 
   useEffect(() => {
-    if (sessionValidationQuery.isSuccess && sessionValidationQuery.data?.success) {
+    if (
+      sessionValidationQuery.isSuccess &&
+      sessionValidationQuery.data?.success
+    ) {
       const userInfo = sessionValidationQuery.data.data;
       if (userInfo) {
         setUsername(userInfo.username);
@@ -154,7 +157,7 @@ const PlayerForm = ({
   useEffect(() => {
     if (playerSavesQuery.isSuccess && playerSavesQuery.data?.success) {
       const savesData = playerSavesQuery.data.data;
-      
+
       if (!savesData || savesData.length === 0) {
         handlePlayGame();
       } else {
@@ -264,9 +267,6 @@ const PlayerForm = ({
                 }}
               >
                 <p>Game ID: {save.game_id}</p>
-                <p>
-                  User ID: <span className={styles.value}>{save.user_id}</span>
-                </p>
                 <p>
                   Total Kills:{" "}
                   <span className={styles["max-level"]}>
