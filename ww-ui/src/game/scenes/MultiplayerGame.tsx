@@ -240,6 +240,7 @@ export default class MultiplayerGameScene extends Scene {
           }
           
           // Server reconciliation: correct client position towards server truth
+          // Server now handles terrain collision, so we can trust server positions
           const distance = Phaser.Math.Distance.Between(
             this.localPlayer.x,
             this.localPlayer.y,
@@ -252,13 +253,11 @@ export default class MultiplayerGameScene extends Scene {
             this.localPlayer.x = position.x;
             this.localPlayer.y = position.y;
           } else if (distance > 2) {
-            // Blend towards server position - stronger correction to prevent drift
-            // Use higher lerp factor to keep client close to server truth
+            // Blend towards server position smoothly
             this.localPlayer.x = Phaser.Math.Linear(this.localPlayer.x, position.x, 0.3);
             this.localPlayer.y = Phaser.Math.Linear(this.localPlayer.y, position.y, 0.3);
           }
           // If within 2 pixels, trust client prediction (feels responsive)
-          // If very close, trust client prediction
         }
       } else {
         // Remote player - update or create

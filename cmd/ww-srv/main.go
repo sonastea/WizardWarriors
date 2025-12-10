@@ -25,7 +25,7 @@ func main() {
 
 	redisClient := redis.NewClient(cfg.RedisOpts)
 
-	h, err := hub.New(cfg, nil)
+	h, err := hub.New(cfg)
 	if err != nil {
 		panic(err)
 	}

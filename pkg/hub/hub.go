@@ -34,8 +34,8 @@ type Hub struct {
 	gameStateManager *GameStateManager
 }
 
-func New(cfg *config.Config, stores *Stores) (*Hub, error) {
-	pubsub, err := NewPubSub(cfg, stores)
+func New(cfg *config.Config) (*Hub, error) {
+	pubsub, err := NewPubSub(cfg)
 	if err != nil {
 		return nil, err
 	}

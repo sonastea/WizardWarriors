@@ -7,15 +7,10 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sonastea/WizardWarriors/pkg/config"
-	"github.com/sonastea/WizardWarriors/pkg/store"
 	"google.golang.org/protobuf/proto"
 
 	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
 )
-
-type Stores struct {
-	UserStore store.UserStore
-}
 
 type Space string
 
@@ -23,11 +18,9 @@ type PubSub struct {
 	conn          *redis.Client
 	subs          []Space
 	subscriptions map[Space]*redis.PubSub
-
-	userStore store.UserStore
 }
 
-func NewPubSub(cfg *config.Config, stores *Stores) (*PubSub, error) {
+func NewPubSub(cfg *config.Config) (*PubSub, error) {
 	rdsClient := redis.NewClient(cfg.RedisOpts)
 	if rdsClient == nil {
 		log.Fatalln("Unable to create redis client")
@@ -38,17 +31,10 @@ func NewPubSub(cfg *config.Config, stores *Stores) (*PubSub, error) {
 		"chat.game",
 	}
 
-	var userStore store.UserStore
-	if stores != nil {
-		userStore = stores.UserStore
-	}
-
 	pubsub := &PubSub{
 		conn:          rdsClient,
 		subs:          subs,
 		subscriptions: make(map[Space]*redis.PubSub),
-
-		userStore: userStore,
 	}
 
 	return pubsub, nil
