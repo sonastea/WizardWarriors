@@ -15,7 +15,7 @@ import Slime from "../entity/slime";
 import { Game as GameScene } from "../scenes/Game";
 import Fireball from "../entity/fireball";
 import { Minimap } from "../ui/Minimap";
-import { TERRAIN_TILES, SLOWDOWN_MULTIPLIER } from "../entity/entity";
+import { TERRAIN_TILES } from "../entity/entity";
 
 const TERRAIN_COLORS = {
   WATER: 0x2980b9,
@@ -308,7 +308,11 @@ export class Game extends Scene {
       this.collisionLayer.setVisible(true);
 
       if (this.terrainLayer) {
-        this.drawTerrainOverlays(this.terrainLayer, map.tileWidth, map.tileHeight);
+        this.drawTerrainOverlays(
+          this.terrainLayer,
+          map.tileWidth,
+          map.tileHeight
+        );
         this.terrainLayer.setVisible(false); // Hide the actual tilemap layer, use graphics instead
       }
 

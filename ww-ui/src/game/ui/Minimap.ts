@@ -35,7 +35,9 @@ interface MinimapConfig {
   worldHeight: number;
 }
 
-const DEFAULT_CONFIG: Required<Omit<MinimapConfig, "worldWidth" | "worldHeight">> = {
+const DEFAULT_CONFIG: Required<
+  Omit<MinimapConfig, "worldWidth" | "worldHeight">
+> = {
   width: 150,
   height: 150,
   margin: 16,
@@ -162,7 +164,10 @@ export class Minimap {
   /**
    * Convert world coordinates to minimap coordinates
    */
-  private worldToMinimap(worldX: number, worldY: number): { x: number; y: number } {
+  private worldToMinimap(
+    worldX: number,
+    worldY: number
+  ): { x: number; y: number } {
     return {
       x: Phaser.Math.Clamp(worldX * this.scaleX, 0, this.config.width),
       y: Phaser.Math.Clamp(worldY * this.scaleY, 0, this.config.height),
@@ -192,11 +197,21 @@ export class Minimap {
   /**
    * Add or update another player's position on the minimap
    */
-  updateOtherPlayer(playerId: string, worldX: number, worldY: number, color: number = 0xff4444): void {
+  updateOtherPlayer(
+    playerId: string,
+    worldX: number,
+    worldY: number,
+    color: number = 0xff4444
+  ): void {
     let indicator = this.otherPlayersIndicators.get(playerId);
 
     if (!indicator) {
-      indicator = this.scene.add.circle(0, 0, this.config.playerSize - 1, color);
+      indicator = this.scene.add.circle(
+        0,
+        0,
+        this.config.playerSize - 1,
+        color
+      );
       this.otherPlayersIndicators.set(playerId, indicator);
       this.container.add(indicator);
     }
@@ -259,7 +274,15 @@ export class Minimap {
   /**
    * Render terrain zones directly (for multiplayer maps without tilemaps)
    */
-  renderTerrainZones(zones: { x: number; y: number; width: number; height: number; color: number }[]): void {
+  renderTerrainZones(
+    zones: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      color: number;
+    }[]
+  ): void {
     this.terrainGraphics.clear();
 
     for (const zone of zones) {
@@ -269,7 +292,12 @@ export class Minimap {
       const minimapHeight = zone.height * this.scaleY;
 
       this.terrainGraphics.fillStyle(zone.color, 0.8);
-      this.terrainGraphics.fillRect(minimapX, minimapY, minimapWidth, minimapHeight);
+      this.terrainGraphics.fillRect(
+        minimapX,
+        minimapY,
+        minimapWidth,
+        minimapHeight
+      );
     }
   }
 

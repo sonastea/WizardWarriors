@@ -5,7 +5,6 @@ import React, { Dispatch, SetStateAction, useState, useEffect } from "react";
 import { gameStatsAtom, setGameSaved } from "src/state";
 import { PlayerSaveResponse } from "src/types/index.types";
 import styles from "./PlayerForm.module.css";
-import { useSocket } from "@contexts/Socket";
 
 export const getCookie = (name: string): string => {
   const cookies = document.cookie.split("; ");

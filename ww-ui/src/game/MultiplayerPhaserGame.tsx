@@ -268,7 +268,9 @@ const MultiplayerPhaserGame = ({
     const handleSendJoin = () => {
       if (!ws || !isConnected) return;
 
-      EventBus.emit("set-local-player-id", { playerId: gameStats.user_id.toString() });
+      EventBus.emit("set-local-player-id", {
+        playerId: gameStats.user_id.toString(),
+      });
 
       const playerEvent = create(PlayerEventSchema, {
         type: PlayerEventType.JOIN,

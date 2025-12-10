@@ -2,6 +2,7 @@ import { GameObjects, Scene } from "phaser";
 import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
+import type { GameState } from "@common/gen/multiplayer/v1/messages_pb";
 
 // These must match server constants
 const MAP_WIDTH = 2000;
@@ -32,7 +33,7 @@ const TERRAIN_ZONES: TerrainZone[] = [
   { x: 1600, y: 200, width: 250, height: 180, type: "water" },
   { x: 800, y: 1500, width: 300, height: 200, type: "water" },
   { x: 100, y: 1700, width: 180, height: 150, type: "water" },
-  
+
   // Quicksand/mud areas (slowdown)
   { x: 500, y: 100, width: 250, height: 200, type: "slowdown" },
   { x: 1200, y: 600, width: 300, height: 250, type: "slowdown" },
@@ -56,7 +57,7 @@ export default class MultiplayerGameScene extends Scene {
   private minimap: Minimap | null = null;
   private terrainZones: TerrainZone[] = TERRAIN_ZONES;
   private currentSpeedModifier: number = 1.0;
-  
+
   // Track last input state to detect changes
   private lastInputState: InputState = {
     moveUp: false,
@@ -71,7 +72,7 @@ export default class MultiplayerGameScene extends Scene {
 
   init() {
     this.scale.on("resize", this.resize, this);
-    
+
     EventBus.on("set-local-player-id", this.handleSetLocalPlayerId, this);
   }
 
@@ -87,7 +88,12 @@ export default class MultiplayerGameScene extends Scene {
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
-    this.localPlayer = this.add.circle(MAP_WIDTH / 2, MAP_HEIGHT / 2, PLAYER_RADIUS, 0x4a9eff);
+    this.localPlayer = this.add.circle(
+      MAP_WIDTH / 2,
+      MAP_HEIGHT / 2,
+      PLAYER_RADIUS,
+      0x4a9eff
+    );
     this.localPlayer.setData("playerId", "local");
     this.localPlayer.setVisible(false); // Hidden until we get server position
 
@@ -123,7 +129,8 @@ export default class MultiplayerGameScene extends Scene {
     const terrainGraphics = this.add.graphics();
 
     for (const zone of this.terrainZones) {
-      const color = zone.type === "water" ? TERRAIN_COLORS.WATER : TERRAIN_COLORS.SLOWDOWN;
+      const color =
+        zone.type === "water" ? TERRAIN_COLORS.WATER : TERRAIN_COLORS.SLOWDOWN;
       const alpha = zone.type === "water" ? 0.8 : 0.6;
 
       // Fill the zone
@@ -142,13 +149,18 @@ export default class MultiplayerGameScene extends Scene {
   private renderTerrainOnMinimap(): void {
     if (!this.minimap) return;
 
-    this.minimap.renderTerrainZones(this.terrainZones.map(zone => ({
-      x: zone.x,
-      y: zone.y,
-      width: zone.width,
-      height: zone.height,
-      color: zone.type === "water" ? TERRAIN_COLORS.WATER : TERRAIN_COLORS.SLOWDOWN,
-    })));
+    this.minimap.renderTerrainZones(
+      this.terrainZones.map((zone) => ({
+        x: zone.x,
+        y: zone.y,
+        width: zone.width,
+        height: zone.height,
+        color:
+          zone.type === "water"
+            ? TERRAIN_COLORS.WATER
+            : TERRAIN_COLORS.SLOWDOWN,
+      }))
+    );
   }
 
   update(_time: number, delta: number) {
@@ -165,7 +177,8 @@ export default class MultiplayerGameScene extends Scene {
     if (this.localPlayer.visible) {
       // Check current terrain and get speed modifier
       this.updateTerrainEffects(this.localPlayer.x, this.localPlayer.y);
-      const currentSpeed = this.currentSpeedModifier < 1.0 ? SLOWDOWN_SPEED : PLAYER_SPEED;
+      const currentSpeed =
+        this.currentSpeedModifier < 1.0 ? SLOWDOWN_SPEED : PLAYER_SPEED;
 
       let velocityX = 0;
       let velocityY = 0;
@@ -198,19 +211,31 @@ export default class MultiplayerGameScene extends Scene {
     // Send input changes to server (event-based, only when input changes)
     // Check each input individually and only send what changed
     if (currentInput.moveUp !== this.lastInputState.moveUp) {
-      EventBus.emit("send-input-change", { input: "moveUp", pressed: currentInput.moveUp });
+      EventBus.emit("send-input-change", {
+        input: "moveUp",
+        pressed: currentInput.moveUp,
+      });
       this.lastInputState.moveUp = currentInput.moveUp;
     }
     if (currentInput.moveDown !== this.lastInputState.moveDown) {
-      EventBus.emit("send-input-change", { input: "moveDown", pressed: currentInput.moveDown });
+      EventBus.emit("send-input-change", {
+        input: "moveDown",
+        pressed: currentInput.moveDown,
+      });
       this.lastInputState.moveDown = currentInput.moveDown;
     }
     if (currentInput.moveLeft !== this.lastInputState.moveLeft) {
-      EventBus.emit("send-input-change", { input: "moveLeft", pressed: currentInput.moveLeft });
+      EventBus.emit("send-input-change", {
+        input: "moveLeft",
+        pressed: currentInput.moveLeft,
+      });
       this.lastInputState.moveLeft = currentInput.moveLeft;
     }
     if (currentInput.moveRight !== this.lastInputState.moveRight) {
-      EventBus.emit("send-input-change", { input: "moveRight", pressed: currentInput.moveRight });
+      EventBus.emit("send-input-change", {
+        input: "moveRight",
+        pressed: currentInput.moveRight,
+      });
       this.lastInputState.moveRight = currentInput.moveRight;
     }
 
@@ -223,22 +248,22 @@ export default class MultiplayerGameScene extends Scene {
     this.localPlayerId = data.playerId;
   }
 
-  handleGameState(data: any) {
+  handleGameState(data: GameState) {
     if (!data.players) return;
     if (!this.localPlayerId) return;
 
     for (const playerState of data.players) {
       const playerId = playerState.playerId?.value;
       const position = playerState.position;
-      
+
       if (!playerId || !position) continue;
-      
+
       if (playerId === this.localPlayerId) {
         if (this.localPlayer) {
           if (!this.localPlayer.visible) {
             this.localPlayer.setVisible(true);
           }
-          
+
           // Server reconciliation: correct client position towards server truth
           // Server now handles terrain collision, so we can trust server positions
           const distance = Phaser.Math.Distance.Between(
@@ -247,15 +272,23 @@ export default class MultiplayerGameScene extends Scene {
             position.x,
             position.y
           );
-          
+
           if (distance > 100) {
             // Snap if very far (teleport, initial spawn, or major desync)
             this.localPlayer.x = position.x;
             this.localPlayer.y = position.y;
           } else if (distance > 2) {
             // Blend towards server position smoothly
-            this.localPlayer.x = Phaser.Math.Linear(this.localPlayer.x, position.x, 0.3);
-            this.localPlayer.y = Phaser.Math.Linear(this.localPlayer.y, position.y, 0.3);
+            this.localPlayer.x = Phaser.Math.Linear(
+              this.localPlayer.x,
+              position.x,
+              0.3
+            );
+            this.localPlayer.y = Phaser.Math.Linear(
+              this.localPlayer.y,
+              position.y,
+              0.3
+            );
           }
           // If within 2 pixels, trust client prediction (feels responsive)
         }
@@ -275,21 +308,28 @@ export default class MultiplayerGameScene extends Scene {
     }
   }
 
-  handlePlayerJoined(data: { playerId: string; username: string; x: number; y: number }) {
+  handlePlayerJoined(data: {
+    playerId: string;
+    username: string;
+    x: number;
+    y: number;
+  }) {
     if (data.playerId === this.localPlayerId) return;
     if (this.players.has(data.playerId)) return;
-    
+
     const player = this.add.circle(data.x, data.y, PLAYER_RADIUS, 0xff4444);
     player.setData("playerId", data.playerId);
     this.players.set(data.playerId, player);
 
-    const label = this.add.text(data.x, data.y - 30, data.username, {
-      fontSize: "12px",
-      color: "#ffffff",
-      backgroundColor: "#000000",
-      padding: { x: 4, y: 2 },
-    }).setOrigin(0.5);
-    
+    const label = this.add
+      .text(data.x, data.y - 30, data.username, {
+        fontSize: "12px",
+        color: "#ffffff",
+        backgroundColor: "#000000",
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5);
+
     player.setData("label", label);
 
     // Add player to minimap
@@ -311,12 +351,12 @@ export default class MultiplayerGameScene extends Scene {
 
   updateRemotePlayer(playerId: string, x: number, y: number) {
     const player = this.players.get(playerId);
-    
+
     if (player) {
       // Smooth interpolation for remote players
       player.x = Phaser.Math.Linear(player.x, x, 0.3);
       player.y = Phaser.Math.Linear(player.y, y, 0.3);
-      
+
       const label = player.getData("label");
       if (label) {
         label.x = player.x;
@@ -338,7 +378,7 @@ export default class MultiplayerGameScene extends Scene {
   private isInWater(x: number, y: number): boolean {
     for (const zone of this.terrainZones) {
       if (zone.type !== "water") continue;
-      
+
       // Check if player circle overlaps with water rectangle
       // Account for player radius on all sides
       if (
@@ -359,7 +399,7 @@ export default class MultiplayerGameScene extends Scene {
   private updateTerrainEffects(x: number, y: number): void {
     for (const zone of this.terrainZones) {
       if (zone.type !== "slowdown") continue;
-      
+
       if (
         x >= zone.x &&
         x <= zone.x + zone.width &&
@@ -378,7 +418,7 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.removeListener("multiplayer-player-joined");
     EventBus.removeListener("multiplayer-player-left");
     EventBus.removeListener("set-local-player-id");
-    
+
     this.minimap?.destroy();
     this.minimap = null;
   }

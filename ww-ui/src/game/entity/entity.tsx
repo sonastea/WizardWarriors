@@ -54,7 +54,7 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
 
     scene.physics.add.collider(this, scene.collisionLayer!);
     scene.physics.add.collider(this, scene.elevationLayer!);
-    
+
     if (scene.terrainLayer) {
       scene.physics.add.collider(this, scene.terrainLayer);
     }
@@ -96,7 +96,7 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
     }
 
     const tile = this.scene.terrainLayer.getTileAtWorldXY(this.x, this.y);
-    
+
     if (tile && TERRAIN_TILES.SLOWDOWN.includes(tile.index)) {
       this.speedModifier = SLOWDOWN_MULTIPLIER;
     } else {

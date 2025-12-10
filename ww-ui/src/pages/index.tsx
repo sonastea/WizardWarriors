@@ -17,12 +17,7 @@ const Home: NextPage = () => {
     () => import("../game/MultiplayerPhaserGame")
   );
 
-  const {
-    data: leaderboardData,
-    isLoading,
-    isError,
-    isFetching,
-  } = useQuery({
+  const { data: leaderboardData } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: async () => {
       if (!apiService) throw new Error("API service not available");
@@ -40,12 +35,8 @@ const Home: NextPage = () => {
     setIsMultiplayer(true);
   };
 
-  const handleLeaveMultiplayer = () => {
-    setIsMultiplayer(false);
-    setPlayable(undefined);
-  };
-
-  const token = typeof window !== "undefined" ? sessionStorage.getItem("token") : null;
+  const token =
+    typeof window !== "undefined" ? sessionStorage.getItem("token") : null;
 
   return (
     <>
