@@ -15,12 +15,6 @@ import Slime from "../entity/slime";
 import { Game as GameScene } from "../scenes/Game";
 import Fireball from "../entity/fireball";
 import { Minimap } from "../ui/Minimap";
-import { TERRAIN_TILES } from "../entity/entity";
-
-const TERRAIN_COLORS = {
-  WATER: 0x2980b9,
-  SLOWDOWN: 0x967969,
-};
 
 export class Game extends Scene {
   player: Player | null;
@@ -268,22 +262,19 @@ export class Game extends Scene {
     this.terrainLayer = map.createLayer("terrain", tileset, 0, 0);
 
     this.collisionLayer?.setCollisionBetween(45, 54);
+    this.collisionLayer?.setCollision([
+      138, 139, 140, 152, 153, 154, 166, 167, 168,
+    ]);
+
     this.elevationLayer?.setCollisionBetween(79, 81);
     this.elevationLayer?.setCollisionBetween(93, 95);
     this.elevationLayer?.setCollisionBetween(107, 109);
 
-    if (this.terrainLayer) {
-      this.terrainLayer.setCollision(TERRAIN_TILES.WATER);
-    }
-
     this.collisionLayer?.setTileIndexCallback(
-      [45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
-      this.onCollideWithObstacleTiles,
-      this
-    );
-
-    this.terrainLayer?.setTileIndexCallback(
-      TERRAIN_TILES.WATER,
+      [
+        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 138, 139, 140, 152, 153, 154,
+        166, 167, 168,
+      ],
       this.onCollideWithObstacleTiles,
       this
     );
@@ -307,24 +298,14 @@ export class Game extends Scene {
       this.elevationLayer.setVisible(true);
       this.collisionLayer.setVisible(true);
 
-      if (this.terrainLayer) {
-        this.drawTerrainOverlays(
-          this.terrainLayer,
-          map.tileWidth,
-          map.tileHeight
-        );
-        this.terrainLayer.setVisible(false); // Hide the actual tilemap layer, use graphics instead
-      }
-
-      // Create minimap in the top-right corner
       this.minimap = new Minimap(this, {
         worldWidth: mapWidth,
         worldHeight: mapHeight,
         width: 150,
-        height: 85, // Match the map aspect ratio (80:45 tiles)
+        height: 85,
       });
 
-      this.minimap.renderTerrain(this.terrainLayer);
+      this.minimap.renderLayers(this.collisionLayer, this.elevationLayer);
     }
 
     this.input?.keyboard?.on("keydown-ESC", () => {
@@ -434,43 +415,6 @@ export class Game extends Scene {
     if (sprite.name !== "fireball" || !sprite.body) return;
     const fireball = sprite as Fireball;
     fireball.explode();
-  }
-
-  /**
-   * Draw visible terrain overlays for water and slowdown zones
-   */
-  private drawTerrainOverlays(
-    terrainLayer: Phaser.Tilemaps.TilemapLayer,
-    tileWidth: number,
-    tileHeight: number
-  ): void {
-    const terrainGraphics = this.add.graphics();
-    terrainGraphics.setDepth(0); // Above ground but below entities
-
-    terrainLayer.forEachTile((tile) => {
-      if (tile.index <= 0) return;
-
-      let color: number | null = null;
-      let alpha = 0.6;
-
-      if (TERRAIN_TILES.WATER.includes(tile.index)) {
-        color = TERRAIN_COLORS.WATER;
-        alpha = 0.85;
-      } else if (TERRAIN_TILES.SLOWDOWN.includes(tile.index)) {
-        color = TERRAIN_COLORS.SLOWDOWN;
-        alpha = 0.7;
-      }
-
-      if (color !== null) {
-        terrainGraphics.fillStyle(color, alpha);
-        terrainGraphics.fillRect(
-          tile.pixelX,
-          tile.pixelY,
-          tileWidth,
-          tileHeight
-        );
-      }
-    });
   }
 
   update(time: number, delta: number) {

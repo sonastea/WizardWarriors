@@ -152,8 +152,6 @@ func (hub *Hub) GetSessionInfo(token string) (*SessionInfo, error) {
 		return nil, fmt.Errorf("session not found or expired")
 	}
 
-	log.Printf("session info: %+v", result)
-
 	return &SessionInfo{
 		UserID:   result["user_id"],
 		Username: result["username"],

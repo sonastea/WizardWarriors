@@ -8,10 +8,12 @@ import { EventBus } from "../EventBus";
 import Ally from "./ally";
 
 export const TERRAIN_TILES = {
-  // Water tiles (impassable) - using tile indices 29-32 (row 2, columns 0-3)
-  WATER: [29, 30, 31, 32],
-  // Slowdown tiles (quicksand/mud) - using tile indices 43-44 (row 3, columns 0-1)
-  SLOWDOWN: [43, 44, 45],
+  // Water tiles (impassable) - tile indices from terrain layer in map1.json
+  // 29-31: water edges/center tiles
+  WATER: [29, 30, 31],
+  // Slowdown tiles (quicksand/mud/pond) - tile indices from terrain layer
+  // 43-44: pond/shallow water tiles that slow movement
+  SLOWDOWN: [43, 44],
 };
 
 export const SLOWDOWN_MULTIPLIER = 0.4; // 40% of normal speed

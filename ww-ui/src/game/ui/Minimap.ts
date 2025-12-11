@@ -1,9 +1,10 @@
 import { GameObjects, Scene } from "phaser";
-import { TERRAIN_TILES } from "../entity/entity";
 
-const TERRAIN_COLORS = {
-  WATER: 0x3498db,
-  SLOWDOWN: 0x967969,
+const LAYER_COLORS = {
+  ROCK: 0x8b4513,
+  PLANT: 0x90ee90,
+  WATER: 0x00bfff,
+  ELEVATION: 0xf0e68c,
 };
 
 interface MinimapConfig {
@@ -45,7 +46,7 @@ const DEFAULT_CONFIG: Required<
   backgroundAlpha: 0.8,
   borderColor: 0xffffff,
   borderWidth: 2,
-  playerColor: 0x4a9eff,
+  playerColor: 0x32cd32,
   playerSize: 6,
   viewportColor: 0xffffff,
   viewportAlpha: 0.3,
@@ -231,34 +232,56 @@ export class Minimap {
     }
   }
 
-  /**
-   * Render terrain tiles from a tilemap layer onto the minimap
-   * Call this once after creating the minimap to draw terrain features
-   */
-  renderTerrain(terrainLayer: Phaser.Tilemaps.TilemapLayer | null): void {
-    if (!terrainLayer) return;
-
+  renderLayers(
+    collisionLayer: Phaser.Tilemaps.TilemapLayer | null,
+    elevationLayer: Phaser.Tilemaps.TilemapLayer | null
+  ): void {
     this.terrainGraphics.clear();
 
-    const tileWidth = terrainLayer.tilemap.tileWidth;
-    const tileHeight = terrainLayer.tilemap.tileHeight;
+    const referenceLayer = collisionLayer || elevationLayer;
+    if (!referenceLayer) return;
+
+    const tileWidth = referenceLayer.tilemap.tileWidth;
+    const tileHeight = referenceLayer.tilemap.tileHeight;
     const minimapTileWidth = tileWidth * this.scaleX;
     const minimapTileHeight = tileHeight * this.scaleY;
 
-    terrainLayer.forEachTile((tile) => {
-      if (tile.index <= 0) return;
+    if (elevationLayer) {
+      elevationLayer.forEachTile((tile) => {
+        if (tile.index <= 0) return;
 
-      let color: number | null = null;
-
-      if (TERRAIN_TILES.WATER.includes(tile.index)) {
-        color = TERRAIN_COLORS.WATER;
-      } else if (TERRAIN_TILES.SLOWDOWN.includes(tile.index)) {
-        color = TERRAIN_COLORS.SLOWDOWN;
-      }
-
-      if (color !== null) {
         const minimapX = tile.pixelX * this.scaleX;
         const minimapY = tile.pixelY * this.scaleY;
+
+        this.terrainGraphics.fillStyle(LAYER_COLORS.ELEVATION, 0.7);
+        this.terrainGraphics.fillRect(
+          minimapX,
+          minimapY,
+          minimapTileWidth,
+          minimapTileHeight
+        );
+      });
+    }
+
+    if (collisionLayer) {
+      collisionLayer.forEachTile((tile) => {
+        if (tile.index <= 0) return;
+
+        const minimapX = tile.pixelX * this.scaleX;
+        const minimapY = tile.pixelY * this.scaleY;
+
+        const waterTiles = [138, 139, 140, 152, 153, 154, 166, 167, 168];
+        const plantTiles = [46, 47, 48, 54];
+        const rockTiles = [51, 52];
+
+        let color = LAYER_COLORS.ROCK;
+        if (waterTiles.includes(tile.index)) {
+          color = LAYER_COLORS.WATER;
+        } else if (plantTiles.includes(tile.index)) {
+          color = LAYER_COLORS.PLANT;
+        } else if (rockTiles.includes(tile.index)) {
+          color = LAYER_COLORS.ROCK;
+        }
 
         this.terrainGraphics.fillStyle(color, 0.8);
         this.terrainGraphics.fillRect(
@@ -267,8 +290,8 @@ export class Minimap {
           minimapTileWidth,
           minimapTileHeight
         );
-      }
-    });
+      });
+    }
   }
 
   /**
