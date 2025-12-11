@@ -336,12 +336,13 @@ export class Game extends Scene {
       },
     });
 
-    this.physics.add.overlap(this.enemies, this.player, (enemy, player) => {
-      (enemy as Player).attackTarget(player as Player);
+    this.physics.add.overlap(this.player, this.enemies, (player, enemy) => {
+      (enemy as Enemy).attackTarget(player as Player);
     });
 
     this.physics.add.overlap(this.enemies, this.allies, (enemy, ally) => {
       (enemy as Enemy).attackTarget(ally as Ally);
+      (ally as Ally).attackTarget(enemy as Enemy);
     });
 
     this.physics.add.overlap(this.fireballPool, this.enemies, (f, e) => {
