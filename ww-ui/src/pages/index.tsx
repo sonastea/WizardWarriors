@@ -10,12 +10,8 @@ import styles from "../styles/index.module.css";
 
 const Home: NextPage = () => {
   const [playable, setPlayable] = useState<boolean>();
-  const [isMultiplayer, setIsMultiplayer] = useState(false);
   const apiService = useApiService();
   const PhaserGame = lazy(() => import("../game/app"));
-  const MultiplayerPhaserGame = lazy(
-    () => import("../game/MultiplayerPhaserGame")
-  );
 
   const { data: leaderboardData } = useQuery({
     queryKey: ["leaderboard"],
@@ -31,31 +27,9 @@ const Home: NextPage = () => {
     refetchInterval: 3000000,
   });
 
-  const handleMultiplayerJoin = () => {
-    setIsMultiplayer(true);
-  };
-
-  const token =
-    typeof window !== "undefined" ? sessionStorage.getItem("token") : null;
-
   return (
     <>
-      {isMultiplayer && token ? (
-        <Suspense
-          fallback={
-            <div className={styles.container}>
-              <Image
-                src="/spinning-circles.svg"
-                alt="Spinning indicator"
-                width={64}
-                height={64}
-              />
-            </div>
-          }
-        >
-          <MultiplayerPhaserGame token={token} />
-        </Suspense>
-      ) : playable ? (
+      {playable ? (
         <Suspense
           fallback={
             <div className={styles.container}>
@@ -72,10 +46,7 @@ const Home: NextPage = () => {
         </Suspense>
       ) : (
         <div className={styles.container}>
-          <PlayerForm
-            setPlayable={setPlayable}
-            onMultiplayerJoin={handleMultiplayerJoin}
-          />
+          <PlayerForm setPlayable={setPlayable} />
           <Leaderboard data={leaderboardData || null} />
         </div>
       )}

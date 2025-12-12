@@ -1,7 +1,8 @@
 import useApiService from "@hooks/useApiService";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAtom } from "jotai";
-import React, { Dispatch, SetStateAction, useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import React, { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { gameStatsAtom, setGameSaved } from "src/state";
 import { PlayerSaveResponse } from "src/types/index.types";
 import styles from "./PlayerForm.module.css";
@@ -17,11 +18,10 @@ export const getCookie = (name: string): string => {
 
 const PlayerForm = ({
   setPlayable,
-  onMultiplayerJoin,
 }: {
   setPlayable: Dispatch<SetStateAction<boolean | undefined>>;
-  onMultiplayerJoin: () => void;
 }) => {
+  const router = useRouter();
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -110,7 +110,7 @@ const PlayerForm = ({
 
         try {
           sessionStorage.setItem("token", token);
-          onMultiplayerJoin();
+          router.push("/multiplayer");
         } catch (err) {
           console.error("Failed to connect to multiplayer:", err);
           setError("Failed to connect to multiplayer server");
@@ -119,11 +119,7 @@ const PlayerForm = ({
     };
 
     handleMultiplayerJoin();
-  }, [
-    joinMultiplayerQuery.isSuccess,
-    joinMultiplayerQuery.data,
-    onMultiplayerJoin,
-  ]);
+  }, [joinMultiplayerQuery.isSuccess, joinMultiplayerQuery.data, router]);
 
   const playerSavesQuery = useQuery({
     queryKey: ["playerSaves"],
