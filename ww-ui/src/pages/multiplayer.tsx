@@ -2,9 +2,8 @@ import useApiService from "@hooks/useApiService";
 import { useQuery } from "@tanstack/react-query";
 import { useAtom } from "jotai";
 import Image from "next/image";
-import { useRouter } from "next/router";
 import { NextPage } from "next/types";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { gameStatsAtom } from "src/state";
 import styles from "../styles/index.module.css";
 
@@ -13,104 +12,138 @@ const MultiplayerPhaserGame = lazy(
 );
 
 const MultiplayerPage: NextPage = () => {
-  const router = useRouter();
   const apiService = useApiService();
   const [_gameStats, setGameStats] = useAtom(gameStatsAtom);
   const [token, setToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [redirectMessage, setRedirectMessage] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestId, setGuestId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Always validate session first to ensure cookie is still valid
-  const sessionValidationQuery = useQuery({
-    queryKey: ["session"],
-    queryFn: async () => {
-      if (!apiService) throw new Error("API service not available");
-      return apiService.validateSession();
-    },
-    enabled: !!apiService,
-    retry: false,
-  });
+  useEffect(() => {
+    const storedToken = sessionStorage.getItem("token");
+    const storedIsGuest = sessionStorage.getItem("isGuest") === "true";
+    const storedGuestId = sessionStorage.getItem("guestId");
 
+    if (storedToken) {
+      setToken(storedToken);
+      setIsGuest(storedIsGuest);
+      if (storedGuestId) setGuestId(storedGuestId);
+      setIsReady(true);
+    }
+  }, []);
+
+  // Join multiplayer - this handles both authenticated and guest users
   const joinMultiplayerQuery = useQuery({
     queryKey: ["multiplayer"],
     queryFn: async () => {
       if (!apiService) throw new Error("API service not available");
-      return apiService.joinMultiplayer();
+      // Pass guest ID if we have one stored (for guest reconnection)
+      const existingGuestId = sessionStorage.getItem("guestId");
+      return apiService.joinMultiplayer(existingGuestId || undefined);
     },
-    enabled: false,
+    enabled: !!apiService && !token,
+    retry: false,
   });
 
-  // Handle session validation result
+  // Handle join multiplayer result
   useEffect(() => {
-    if (sessionValidationQuery.isSuccess) {
-      if (sessionValidationQuery.data?.success) {
-        const userInfo = sessionValidationQuery.data.data;
-        if (userInfo) {
+    if (joinMultiplayerQuery.isSuccess && joinMultiplayerQuery.data?.success) {
+      const data = joinMultiplayerQuery.data.data;
+      if (data) {
+        sessionStorage.setItem("token", data.token);
+        sessionStorage.setItem("isGuest", data.isGuest.toString());
+
+        if (data.isGuest && data.guestId) {
+          sessionStorage.setItem("guestId", data.guestId);
+          setGuestId(data.guestId);
           setGameStats((prev) => ({
             ...prev,
-            user_id: userInfo.id,
-            username: userInfo.username,
+            user_id: -1,
+            username: data.guestId || "Guest",
           }));
-
-          // Session is valid, check for existing token or fetch new one
-          const storedToken = sessionStorage.getItem("token");
-          if (storedToken) {
-            setToken(storedToken);
-            setIsReady(true);
-          } else {
-            joinMultiplayerQuery.refetch();
-          }
         }
-      } else {
-        // Session invalid, clear token and show message before redirect
-        sessionStorage.removeItem("token");
-        setRedirectMessage(
-          "You must be signed in to play multiplayer. Redirecting..."
-        );
-        setTimeout(() => router.push("/"), 2000);
-      }
-    } else if (sessionValidationQuery.isError) {
-      // Session validation failed, clear token and show message before redirect
-      sessionStorage.removeItem("token");
-      setRedirectMessage(
-        "You must be signed in to play multiplayer. Redirecting..."
-      );
-      setTimeout(() => router.push("/"), 2000);
-    }
-  }, [
-    sessionValidationQuery.isSuccess,
-    sessionValidationQuery.isError,
-    sessionValidationQuery.data,
-  ]);
 
-  useEffect(() => {
-    if (
-      joinMultiplayerQuery.isSuccess &&
-      joinMultiplayerQuery.data?.data?.token
+        setToken(data.token);
+        setIsGuest(data.isGuest);
+        setIsReady(true);
+      }
+    } else if (
+      joinMultiplayerQuery.isError ||
+      (joinMultiplayerQuery.isSuccess && !joinMultiplayerQuery.data?.success)
     ) {
-      const newToken = joinMultiplayerQuery.data.data.token;
-      sessionStorage.setItem("token", newToken);
-      setToken(newToken);
-      setIsReady(true);
-    } else if (joinMultiplayerQuery.isError) {
-      sessionStorage.removeItem("token");
-      setRedirectMessage("Failed to connect to multiplayer. Redirecting...");
-      setTimeout(() => router.push("/"), 2000);
+      setError("Failed to connect to multiplayer. Please try again.");
     }
   }, [
     joinMultiplayerQuery.isSuccess,
     joinMultiplayerQuery.isError,
     joinMultiplayerQuery.data,
+    setGameStats,
   ]);
 
-  if (redirectMessage) {
+  // Callback when guest logs in via modal
+  const handleLoginSuccess = useCallback(
+    async (
+      userInfo: { id: number; username: string },
+      reconnectWithToken: (newToken: string) => Promise<void>
+    ) => {
+      setGameStats((prev) => ({
+        ...prev,
+        user_id: userInfo.id,
+        username: userInfo.username,
+      }));
+
+      // Clear guest data
+      sessionStorage.removeItem("guestId");
+      sessionStorage.removeItem("isGuest");
+      sessionStorage.removeItem("token");
+
+      // Get new authenticated token and reconnect
+      if (apiService) {
+        const result = await apiService.joinMultiplayer();
+        if (result.success && result.data) {
+          sessionStorage.setItem("token", result.data.token);
+          sessionStorage.setItem("isGuest", "false");
+          setToken(result.data.token);
+          setIsGuest(false);
+          setGuestId(null);
+
+          // Reconnect WebSocket with new authenticated token
+          await reconnectWithToken(result.data.token);
+        }
+      }
+    },
+    [apiService, setGameStats]
+  );
+
+  if (error) {
     return (
       <div className={styles.container}>
         <p
           style={{ color: "#ff6b6b", fontSize: "1.2rem", textAlign: "center" }}
         >
-          {redirectMessage}
+          {error}
         </p>
+        <button
+          onClick={() => {
+            setError(null);
+            sessionStorage.removeItem("token");
+            setToken(null);
+            setIsReady(false);
+            joinMultiplayerQuery.refetch();
+          }}
+          style={{
+            marginTop: "1rem",
+            padding: "10px 20px",
+            backgroundColor: "#4a9eff",
+            border: "none",
+            borderRadius: "4px",
+            color: "white",
+            cursor: "pointer",
+          }}
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -125,11 +158,9 @@ const MultiplayerPage: NextPage = () => {
           height={64}
         />
         <p style={{ color: "white", marginTop: "1rem" }}>
-          {sessionValidationQuery.isLoading
-            ? "Loading multiplayer..."
-            : joinMultiplayerQuery.isFetching
-              ? "Connecting to multiplayer..."
-              : "Loading..."}
+          {joinMultiplayerQuery.isFetching
+            ? "Connecting to multiplayer..."
+            : "Loading..."}
         </p>
       </div>
     );
@@ -148,7 +179,12 @@ const MultiplayerPage: NextPage = () => {
         </div>
       }
     >
-      <MultiplayerPhaserGame token={token} />
+      <MultiplayerPhaserGame
+        token={token}
+        isGuest={isGuest}
+        guestId={guestId}
+        onLoginSuccess={handleLoginSuccess}
+      />
     </Suspense>
   );
 };

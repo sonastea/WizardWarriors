@@ -1,10 +1,3 @@
-import usePhaserGame from "@hooks/usePhaserGame";
-import { RefObject, useEffect, useRef, useState } from "react";
-import { Types } from "phaser";
-import { EventBus } from "./EventBus";
-import { useSocket } from "@contexts/Socket";
-import MultiplayerLobbyScene from "./scenes/MultiplayerLobby";
-import MultiplayerGameScene from "./scenes/MultiplayerGame";
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
   ChatMessageSchema,
@@ -12,13 +5,21 @@ import {
   GameMessageType,
 } from "@common/gen/multiplayer/v1/messages_pb";
 import {
-  PlayerEventSchema,
-  PlayerEventType,
   InputActionSchema,
   InputType,
+  PlayerEventSchema,
+  PlayerEventType,
 } from "@common/gen/multiplayer/v1/player_pb";
+import { useSocket } from "@contexts/Socket";
+import usePhaserGame from "@hooks/usePhaserGame";
 import { useAtomValue } from "jotai";
+import { Types } from "phaser";
+import { RefObject, useEffect, useRef, useState } from "react";
+import LoginModal from "src/components/LoginModal";
 import { gameStatsAtom } from "src/state";
+import { EventBus } from "./EventBus";
+import MultiplayerGameScene from "./scenes/MultiplayerGame";
+import MultiplayerLobbyScene from "./scenes/MultiplayerLobby";
 
 export interface IRefPhaserGame {
   game: Phaser.Game | null;
@@ -28,6 +29,12 @@ export interface IRefPhaserGame {
 interface MultiplayerPhaserGameProps {
   currentActiveScene?: (scene_instance: Phaser.Scene) => void;
   token: string;
+  isGuest?: boolean;
+  guestId?: string | null;
+  onLoginSuccess?: (
+    userInfo: { id: number; username: string },
+    reconnect: (newToken: string) => Promise<void>
+  ) => void;
 }
 
 const multiplayerConfig: Types.Core.GameConfig = {
@@ -69,12 +76,16 @@ interface LobbyUserDisplay {
 const MultiplayerPhaserGame = ({
   currentActiveScene,
   token,
+  isGuest = false,
+  guestId,
+  onLoginSuccess,
 }: MultiplayerPhaserGameProps) => {
   const gameRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<IRefPhaserGame>({ game: null, scene: null });
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  const { ws, isConnected, isConnecting, error, connect } = useSocket();
+  const { ws, isConnected, isConnecting, error, connect, reconnectWithToken } =
+    useSocket();
   const gameStats = useAtomValue(gameStatsAtom);
 
   const [isReady, setIsReady] = useState(false);
@@ -82,12 +93,30 @@ const MultiplayerPhaserGame = ({
   const [chatInput, setChatInput] = useState("");
   const [lobbyUsers, setLobbyUsers] = useState<LobbyUserDisplay[]>([]);
   const [gameUsers, setGameUsers] = useState<LobbyUserDisplay[]>([]);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Get player ID - use guestId for guests, otherwise use gameStats.user_id
+  const getPlayerId = () => {
+    if (isGuest && guestId) {
+      return guestId;
+    }
+    return gameStats.user_id.toString();
+  };
 
   useEffect(() => {
     if (token && !isConnected && !isConnecting) {
       connect(token);
     }
   }, [token]);
+
+  // Reset state when disconnecting (e.g., after guest logs in and reconnects)
+  useEffect(() => {
+    if (!isConnected) {
+      setIsReady(false);
+      setLobbyUsers([]);
+      setGameUsers([]);
+    }
+  }, [isConnected]);
 
   useEffect(() => {
     if (!ws) return;
@@ -247,7 +276,7 @@ const MultiplayerPhaserGame = ({
 
       const playerEvent = create(PlayerEventSchema, {
         type: PlayerEventType.INPUT,
-        playerId: { value: gameStats.user_id.toString() },
+        playerId: { value: getPlayerId() },
         inputAction: create(InputActionSchema, {
           input: inputType,
           pressed: data.pressed,
@@ -268,13 +297,14 @@ const MultiplayerPhaserGame = ({
     const handleSendJoin = () => {
       if (!ws || !isConnected) return;
 
+      const playerId = getPlayerId();
       EventBus.emit("set-local-player-id", {
-        playerId: gameStats.user_id.toString(),
+        playerId: playerId,
       });
 
       const playerEvent = create(PlayerEventSchema, {
         type: PlayerEventType.JOIN,
-        playerId: { value: gameStats.user_id.toString() },
+        playerId: { value: playerId },
       });
 
       const message = create(GameMessageSchema, {
@@ -306,7 +336,7 @@ const MultiplayerPhaserGame = ({
 
     const playerEvent = create(PlayerEventSchema, {
       type: PlayerEventType.READY,
-      playerId: { value: gameStats.user_id.toString() },
+      playerId: { value: getPlayerId() },
     });
 
     const message = create(GameMessageSchema, {
@@ -459,8 +489,28 @@ const MultiplayerPhaserGame = ({
                   cursor: isReady ? "not-allowed" : "pointer",
                 }}
               >
-                {isReady ? "Ready!" : "Ready Up"}
+                {isReady ? "Ready!" : isGuest ? "Ready as Guest" : "Ready"}
               </button>
+
+              {isGuest && (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    marginTop: "8px",
+                    backgroundColor: "#4a9eff",
+                    border: "none",
+                    borderRadius: "4px",
+                    color: "white",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  Sign In
+                </button>
+              )}
             </>
           )}
         </div>
@@ -546,6 +596,18 @@ const MultiplayerPhaserGame = ({
           </button>
         </form>
       </div>
+
+      {/* Login Modal for guests */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onLoginSuccess={(userInfo) => {
+          setShowLoginModal(false);
+          if (onLoginSuccess) {
+            onLoginSuccess(userInfo, reconnectWithToken);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -16,6 +16,7 @@ interface ISocketContext {
   connect: (token: string) => Promise<void>;
   disconnect: () => void;
   reconnect: () => Promise<void>;
+  reconnectWithToken: (token: string) => Promise<void>;
 }
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
@@ -109,6 +110,64 @@ export function SocketProvider({
     await connect(tokenRef.current);
   }, [connect, disconnect]);
 
+  const reconnectWithToken = useCallback(
+    async (newToken: string) => {
+      // Close existing connection if any
+      if (ws) {
+        ws.close();
+        setWs(null);
+      }
+
+      // Wait for cleanup
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Reset state and connect with new token
+      setIsConnected(false);
+      setIsConnecting(true);
+      setError(null);
+      tokenRef.current = newToken;
+
+      try {
+        const websocket = new WebSocket(`${WS_URL}?token=${newToken}`);
+        websocket.binaryType = "arraybuffer";
+
+        websocket.onopen = () => {
+          console.log("Reconnected to multiplayer game server");
+          setIsConnected(true);
+          setIsConnecting(false);
+          setError(null);
+        };
+
+        websocket.onclose = (event) => {
+          console.log(
+            "Disconnected from multiplayer server",
+            event.code,
+            event.reason
+          );
+          setIsConnected(false);
+          setIsConnecting(false);
+          setWs(null);
+        };
+
+        websocket.onerror = (event) => {
+          console.error("WebSocket error:", event);
+          setError("Failed to connect to multiplayer server");
+          setIsConnecting(false);
+          setIsConnected(false);
+        };
+
+        setWs(websocket);
+      } catch (err) {
+        console.error("Reconnection error:", err);
+        setError(
+          err instanceof Error ? err.message : "Unknown connection error"
+        );
+        setIsConnecting(false);
+      }
+    },
+    [ws]
+  );
+
   return (
     <SocketContext.Provider
       value={{
@@ -119,6 +178,7 @@ export function SocketProvider({
         connect,
         disconnect,
         reconnect,
+        reconnectWithToken,
       }}
     >
       {children}

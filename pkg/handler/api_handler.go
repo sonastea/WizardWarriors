@@ -42,6 +42,10 @@ type PlayerSaveRequest struct {
 	GameID uint64 `json:"game_id"`
 }
 
+type JoinMultiplayerRequest struct {
+	GuestID string `json:"guestId,omitempty"`
+}
+
 func errorResponse(err string) APIResponse {
 	return APIResponse{
 		Success: false,
@@ -304,24 +308,36 @@ func (h *ApiHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, successResponse(leaderboard))
 }
 
-// JoinMultiplayer handles authenticate the user before redirecting them to the game server
+// JoinMultiplayer handles authenticating the user or creating a guest session for the game server
 func (h *ApiHandler) JoinMultiplayer(w http.ResponseWriter, r *http.Request) {
+	// Try to get authenticated user from cookie
 	cookie, err := r.Cookie("ww-userId")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			writeJSON(w, http.StatusUnauthorized, errorResponse("Not authenticated"))
+	if err == nil {
+		// User has a cookie, try to authenticate
+		userID, parseErr := strconv.ParseUint(cookie.Value, 10, 64)
+		if parseErr == nil {
+			token, joinErr := h.apiService.JoinMultiplayer(r.Context(), userID)
+			if joinErr == nil {
+				writeJSON(w, http.StatusOK, successResponse(token))
+				return
+			}
+			// If join fails, fall through to guest flow
+			log.Printf("Authenticated join failed, falling back to guest: %v", joinErr)
 		}
-		writeJSON(w, http.StatusInternalServerError, errorResponse("Error retrieving authentication"))
 	}
 
-	userID, err := strconv.ParseUint(cookie.Value, 10, 64)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse("Error processing your request."))
+	// No valid cookie or auth failed - handle as guest
+	var req JoinMultiplayerRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+			writeJSON(w, http.StatusBadRequest, errorResponse("Invalid request body"))
+			return
+		}
 	}
 
-	token, err := h.apiService.JoinMultiplayer(r.Context(), userID)
+	token, err := h.apiService.JoinMultiplayerAsGuest(r.Context(), req.GuestID)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, errorResponse("Please log back in and try again."))
+		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to create guest session"))
 		return
 	}
 

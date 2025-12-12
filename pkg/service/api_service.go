@@ -15,12 +15,20 @@ type UserInfo struct {
 	Username string `json:"username"`
 }
 
+// JoinMultiplayerResponse contains token and guest status
+type JoinMultiplayerResponse struct {
+	Token   repository.GameSessionToken `json:"token"`
+	IsGuest bool                        `json:"isGuest"`
+	GuestID string                      `json:"guestId,omitempty"`
+}
+
 // ApiService defines the interface for API business logic (users and games)
 type ApiService interface {
 	Register(ctx context.Context, username, password string) (uint64, error)
 	Login(ctx context.Context, username, password string) (uint64, error)
 	ValidateSession(ctx context.Context, userID uint64) (*UserInfo, error)
-	JoinMultiplayer(ctx context.Context, userID uint64) (*map[string]repository.GameSessionToken, error)
+	JoinMultiplayer(ctx context.Context, userID uint64) (*JoinMultiplayerResponse, error)
+	JoinMultiplayerAsGuest(ctx context.Context, guestID string) (*JoinMultiplayerResponse, error)
 	GetPlayerSave(ctx context.Context, gameID uint64) (*entity.PlayerSave, error)
 	GetPlayerSaves(ctx context.Context, userID uint64) ([]entity.PlayerSave, error)
 	GetLeaderboard(ctx context.Context) ([]entity.GameStats, error)
@@ -172,7 +180,7 @@ func (s *apiService) ValidateSession(ctx context.Context, userID uint64) (*UserI
 	}, nil
 }
 
-func (s *apiService) JoinMultiplayer(ctx context.Context, userID uint64) (*map[string]repository.GameSessionToken, error) {
+func (s *apiService) JoinMultiplayer(ctx context.Context, userID uint64) (*JoinMultiplayerResponse, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user")
@@ -183,8 +191,21 @@ func (s *apiService) JoinMultiplayer(ctx context.Context, userID uint64) (*map[s
 		return nil, fmt.Errorf("failed to connect user to multiplayer")
 	}
 
-	data := make(map[string]repository.GameSessionToken)
-	data["token"] = token
+	return &JoinMultiplayerResponse{
+		Token:   token,
+		IsGuest: false,
+	}, nil
+}
 
-	return &data, nil
+func (s *apiService) JoinMultiplayerAsGuest(ctx context.Context, guestID string) (*JoinMultiplayerResponse, error) {
+	token, finalGuestID, err := s.gameRepo.JoinMultiplayerAsGuest(ctx, guestID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create guest session")
+	}
+
+	return &JoinMultiplayerResponse{
+		Token:   token,
+		IsGuest: true,
+		GuestID: finalGuestID,
+	}, nil
 }

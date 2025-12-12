@@ -65,6 +65,8 @@ export interface PlayerSaveResponse extends PlayerSaveGameDetails {
 
 export interface JoinMultiplayerResponse {
   token: string;
+  isGuest: boolean;
+  guestId?: string;
 }
 
 export interface UserInfo {

@@ -135,7 +135,7 @@ class ApiService {
     }
   }
 
-  async joinMultiplayer(): Promise<JoinMultiplayerApiResponse> {
+  async joinMultiplayer(guestId?: string): Promise<JoinMultiplayerApiResponse> {
     try {
       const response = await fetch(this.baseUrl + "/api/join-multiplayer", {
         method: "POST",
@@ -143,6 +143,7 @@ class ApiService {
           "Content-Type": "application/json",
         },
         credentials: "include",
+        body: guestId ? JSON.stringify({ guestId }) : undefined,
       });
 
       const result: JoinMultiplayerApiResponse = await response.json();

@@ -23,6 +23,7 @@ type GameSessionInfo struct {
 // GameRepository defines the interface for game storage operations
 type GameRepository interface {
 	JoinMultiplayer(ctx context.Context, userID uint64, username string) (GameSessionToken, error)
+	JoinMultiplayerAsGuest(ctx context.Context, guestID string) (GameSessionToken, string, error)
 	GetSessionInfo(ctx context.Context, token string) (*GameSessionInfo, error)
 	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
 	GetPlayerSavesByUserID(ctx context.Context, userID int) ([]entity.PlayerSave, error)
@@ -350,6 +351,40 @@ func (r *gameRepository) JoinMultiplayer(ctx context.Context, userID uint64, use
 	}
 
 	return GameSessionToken(token), nil
+}
+
+// JoinMultiplayerAsGuest creates a guest session and returns a GameSessionToken
+// If guestID is empty, generates a new one. Returns the token and the guestID used.
+func (r *gameRepository) JoinMultiplayerAsGuest(ctx context.Context, guestID string) (GameSessionToken, string, error) {
+	// Generate guest ID if not provided
+	if guestID == "" {
+		randBytes := make([]byte, 4)
+		_, err := rand.Read(randBytes)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to generate guest ID: %w", err)
+		}
+		guestID = "Guest-" + hex.EncodeToString(randBytes)
+	}
+
+	// Generate session token
+	tokenLen := 32
+	b := make([]byte, tokenLen)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate token: %w", err)
+	}
+	token := hex.EncodeToString(b)
+
+	// Store guest session in Redis
+	pipe := r.redis.Pipeline()
+	pipe.HSet(ctx, "gamesession:token:"+token, "user_id", guestID, "username", guestID, "is_guest", "true")
+	pipe.Expire(ctx, "gamesession:token:"+token, 30*time.Minute)
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to store guest session: %w", err)
+	}
+
+	return GameSessionToken(token), guestID, nil
 }
 
 // GetSessionInfo retrieves user information from a game session token
