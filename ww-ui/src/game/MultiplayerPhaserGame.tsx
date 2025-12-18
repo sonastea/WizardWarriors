@@ -43,11 +43,12 @@ const multiplayerConfig: Types.Core.GameConfig = {
   title: "WizardWarriors - Multiplayer",
   parent: "game-content",
   backgroundColor: "#1a1a1a",
-  width: 1280,
-  height: 720,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 1280,
+    height: 720,
+    parent: "game-content",
   },
   physics: {
     default: "arcade",
@@ -383,8 +384,20 @@ const MultiplayerPhaserGame = ({
   };
 
   return (
-    <div style={{ position: "relative" }}>
-      <div ref={gameRef} />
+    <div
+      style={{
+        position: "relative",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        backgroundColor: "#1a1a1a",
+      }}
+    >
+      <div
+        id="game-content"
+        ref={gameRef}
+        style={{ width: "100%", height: "100%" }}
+      />
 
       {/* Lobby UI Overlay - only show when not ready */}
       {!isReady && (

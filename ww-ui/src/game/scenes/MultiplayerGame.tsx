@@ -83,7 +83,6 @@ export default class MultiplayerGameScene extends Scene {
     graphics.lineStyle(4, 0xffffff, 0.5);
     graphics.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
-    // Draw terrain zones
     this.drawTerrainZones();
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
