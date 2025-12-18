@@ -4,6 +4,7 @@ export const SCENES = {
   PAUSE: "PauseScene",
   PRELOAD: "PreloadScene",
   GAME_OVER: "GameOverScene",
+  MULTIPLAYER_PRELOAD: "MultiplayerPreloadScene",
   MULTIPLAYER_LOBBY: "MultiplayerLobbyScene",
   MULTIPLAYER_GAME: "MultiplayerGameScene",
 };

@@ -9,39 +9,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Map constants - server is authoritative over these
 const (
-	MapWidth      float32 = 2000
-	MapHeight     float32 = 2000
 	PlayerRadius  float32 = 16
 	PlayerSpeed   float32 = 200 // pixels per second
 	SlowdownSpeed float32 = 80  // speed in slowdown zones
 )
-
-// TerrainZone represents an area with special properties
-type TerrainZone struct {
-	X      float32
-	Y      float32
-	Width  float32
-	Height float32
-	Type   string // "water" or "slowdown"
-}
-
-// Terrain zones - must match client-side terrain
-var TerrainZones = []TerrainZone{
-	// Water ponds (impassable)
-	{X: 150, Y: 300, Width: 200, Height: 150, Type: "water"},
-	{X: 1600, Y: 200, Width: 250, Height: 180, Type: "water"},
-	{X: 800, Y: 1500, Width: 300, Height: 200, Type: "water"},
-	{X: 100, Y: 1700, Width: 180, Height: 150, Type: "water"},
-
-	// Quicksand/mud areas (slowdown)
-	{X: 500, Y: 100, Width: 250, Height: 200, Type: "slowdown"},
-	{X: 1200, Y: 600, Width: 300, Height: 250, Type: "slowdown"},
-	{X: 300, Y: 1000, Width: 200, Height: 300, Type: "slowdown"},
-	{X: 1500, Y: 1300, Width: 280, Height: 220, Type: "slowdown"},
-	{X: 900, Y: 400, Width: 180, Height: 150, Type: "slowdown"},
-}
 
 type PlayerState struct {
 	UserID   string
@@ -59,14 +31,16 @@ type GameStateManager struct {
 	mu       sync.RWMutex
 	players  map[string]*PlayerState
 	hub      *Hub
+	gameMap  *GameMap
 	tickRate time.Duration
 	lastTick time.Time
 }
 
-func NewGameStateManager(hub *Hub, tickRate time.Duration) *GameStateManager {
+func NewGameStateManager(hub *Hub, gameMap *GameMap, tickRate time.Duration) *GameStateManager {
 	return &GameStateManager{
 		players:  make(map[string]*PlayerState),
 		hub:      hub,
+		gameMap:  gameMap,
 		tickRate: tickRate,
 		lastTick: time.Now(),
 	}
@@ -78,13 +52,13 @@ func (gsm *GameStateManager) AddPlayer(userID string, username string) {
 	defer gsm.mu.Unlock()
 
 	// Server generates spawn position (client suggestion is ignored for security)
-	// Keep trying until we find a position not in water
+	// Keep trying until we find a position not in collision
 	var spawnX, spawnY float32
 	maxAttempts := 100
 	for range maxAttempts {
-		spawnX = PlayerRadius + rand.Float32()*(MapWidth-2*PlayerRadius)
-		spawnY = PlayerRadius + rand.Float32()*(MapHeight-2*PlayerRadius)
-		if !isInWater(spawnX, spawnY) {
+		spawnX = PlayerRadius + rand.Float32()*(gsm.gameMap.PixelWidth-2*PlayerRadius)
+		spawnY = PlayerRadius + rand.Float32()*(gsm.gameMap.PixelHeight-2*PlayerRadius)
+		if gsm.gameMap.IsValidSpawnPoint(spawnX, spawnY, PlayerRadius) {
 			break
 		}
 	}
@@ -145,38 +119,12 @@ func clamp(value, min, max float32) float32 {
 	return value
 }
 
-// isInZone checks if a point is inside a terrain zone
-func isInZone(x, y float32, zone TerrainZone) bool {
-	return x >= zone.X && x <= zone.X+zone.Width &&
-		y >= zone.Y && y <= zone.Y+zone.Height
-}
-
-// isInWater checks if a position is inside any water zone
-func isInWater(x, y float32) bool {
-	for _, zone := range TerrainZones {
-		if zone.Type == "water" && isInZone(x, y, zone) {
-			return true
-		}
-	}
-	return false
-}
-
-// isInSlowdown checks if a position is inside any slowdown zone
-func isInSlowdown(x, y float32) bool {
-	for _, zone := range TerrainZones {
-		if zone.Type == "slowdown" && isInZone(x, y, zone) {
-			return true
-		}
-	}
-	return false
-}
-
 // simulateMovement processes all player inputs and updates positions
 func (gsm *GameStateManager) simulateMovement(deltaSeconds float32) {
 	for _, player := range gsm.players {
 		// Determine speed based on terrain
 		speed := PlayerSpeed
-		if isInSlowdown(player.X, player.Y) {
+		if gsm.gameMap.IsInSlowdown(player.X, player.Y) {
 			speed = SlowdownSpeed
 		}
 
@@ -200,20 +148,20 @@ func (gsm *GameStateManager) simulateMovement(deltaSeconds float32) {
 		newY := player.Y + velocityY*deltaSeconds
 
 		// Clamp to map boundaries (server enforces this)
-		newX = clamp(newX, PlayerRadius, MapWidth-PlayerRadius)
-		newY = clamp(newY, PlayerRadius, MapHeight-PlayerRadius)
+		newX = clamp(newX, PlayerRadius, gsm.gameMap.PixelWidth-PlayerRadius)
+		newY = clamp(newY, PlayerRadius, gsm.gameMap.PixelHeight-PlayerRadius)
 
-		// Check water collision - only update if new position is not in water
-		if !isInWater(newX, newY) {
+		// Check collision - only update if new position doesn't collide
+		if !gsm.gameMap.IsCollision(newX, newY, PlayerRadius) {
 			player.X = newX
 			player.Y = newY
 		} else {
-			// Try moving in X direction only
-			if !isInWater(newX, player.Y) {
+			// Try moving in X direction only (allows sliding along walls)
+			if !gsm.gameMap.IsCollision(newX, player.Y, PlayerRadius) {
 				player.X = newX
 			}
 			// Try moving in Y direction only
-			if !isInWater(player.X, newY) {
+			if !gsm.gameMap.IsCollision(player.X, newY, PlayerRadius) {
 				player.Y = newY
 			}
 		}
@@ -241,6 +189,11 @@ func (gsm *GameStateManager) GetPlayerIds() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// GetMapDimensions returns the map width and height in pixels
+func (gsm *GameStateManager) GetMapDimensions() (float32, float32) {
+	return gsm.gameMap.PixelWidth, gsm.gameMap.PixelHeight
 }
 
 func (gsm *GameStateManager) Start() {

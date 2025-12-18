@@ -20,6 +20,7 @@ import { gameStatsAtom } from "src/state";
 import { EventBus } from "./EventBus";
 import MultiplayerGameScene from "./scenes/MultiplayerGame";
 import MultiplayerLobbyScene from "./scenes/MultiplayerLobby";
+import MultiplayerPreloadScene from "./scenes/MultiplayerPreloadScene";
 
 export interface IRefPhaserGame {
   game: Phaser.Game | null;
@@ -60,7 +61,7 @@ const multiplayerConfig: Types.Core.GameConfig = {
   antialias: false,
   pixelArt: true,
   roundPixels: true,
-  scene: [MultiplayerLobbyScene, MultiplayerGameScene],
+  scene: [MultiplayerPreloadScene, MultiplayerLobbyScene, MultiplayerGameScene],
 };
 
 interface ChatMessageDisplay {

@@ -1,46 +1,24 @@
-import { GameObjects, Scene } from "phaser";
+import { GameObjects, Scene, Tilemaps } from "phaser";
 import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
 import type { GameState } from "@common/gen/multiplayer/v1/messages_pb";
 
-// These must match server constants
-const MAP_WIDTH = 2000;
-const MAP_HEIGHT = 2000;
 const PLAYER_RADIUS = 16;
 const PLAYER_SPEED = 200;
 const SLOWDOWN_SPEED = 80; // Speed when in slowdown zones
 
-// Terrain zone colors
-const TERRAIN_COLORS = {
-  WATER: 0x3498db,
-  SLOWDOWN: 0xc4a35a,
+// Collision tile IDs - must match server (maploader.go)
+const COLLISION_TILES = {
+  // Rocks and obstacles from collisions layer
+  obstacles: [55, 56, 57, 58, 59, 60, 61, 62, 63],
+  // Buildings
+  buildings: [148, 149, 150, 165, 166, 167, 182, 183, 184],
+  // Elevation tiles that block movement
+  elevation: [93, 94, 95, 111, 112, 113, 128, 129, 130],
+  // Slowdown tiles (quicksand, mud, etc.)
+  slowdown: [168, 169, 170, 185, 186, 187, 202, 203, 204],
 };
-
-// Define terrain zones (x, y, width, height)
-interface TerrainZone {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  type: "water" | "slowdown";
-}
-
-// Terrain layout for the multiplayer map
-const TERRAIN_ZONES: TerrainZone[] = [
-  // Water ponds (impassable)
-  { x: 150, y: 300, width: 200, height: 150, type: "water" },
-  { x: 1600, y: 200, width: 250, height: 180, type: "water" },
-  { x: 800, y: 1500, width: 300, height: 200, type: "water" },
-  { x: 100, y: 1700, width: 180, height: 150, type: "water" },
-
-  // Quicksand/mud areas (slowdown)
-  { x: 500, y: 100, width: 250, height: 200, type: "slowdown" },
-  { x: 1200, y: 600, width: 300, height: 250, type: "slowdown" },
-  { x: 300, y: 1000, width: 200, height: 300, type: "slowdown" },
-  { x: 1500, y: 1300, width: 280, height: 220, type: "slowdown" },
-  { x: 900, y: 400, width: 180, height: 150, type: "slowdown" },
-];
 
 interface InputState {
   moveUp: boolean;
@@ -55,10 +33,14 @@ export default class MultiplayerGameScene extends Scene {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private localPlayerId: string | null = null;
   private minimap: Minimap | null = null;
-  private terrainZones: TerrainZone[] = TERRAIN_ZONES;
-  private currentSpeedModifier: number = 1.0;
 
-  // Track last input state to detect changes
+  private collisionLayer: Tilemaps.TilemapLayer | null = null;
+  private elevationLayer: Tilemaps.TilemapLayer | null = null;
+  private terrainLayer: Tilemaps.TilemapLayer | null = null;
+
+  private mapWidth: number = 0;
+  private mapHeight: number = 0;
+
   private lastInputState: InputState = {
     moveUp: false,
     moveDown: false,
@@ -72,94 +54,106 @@ export default class MultiplayerGameScene extends Scene {
 
   init() {
     this.scale.on("resize", this.resize, this);
-
     EventBus.on("set-local-player-id", this.handleSetLocalPlayerId, this);
   }
 
   create() {
-    this.add.rectangle(0, 0, MAP_WIDTH, MAP_HEIGHT, 0x2a2a2a).setOrigin(0, 0);
+    const map = this.make.tilemap({ key: "map" });
+    const tileset = map.addTilesetImage("DesertTilemap", "tiles");
+    if (!tileset) {
+      console.error("Tileset not found");
+      return;
+    }
 
-    const graphics = this.add.graphics();
-    graphics.lineStyle(4, 0xffffff, 0.5);
-    graphics.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    // Get map dimensions
+    this.mapWidth = map.widthInPixels;
+    this.mapHeight = map.heightInPixels;
 
-    this.drawTerrainZones();
+    // Create all layers
+    const groundLayer = map.createLayer("ground", tileset, 0, 0);
+    this.elevationLayer = map.createLayer("elevation", tileset, 0, 0);
+    this.collisionLayer = map.createLayer("collisions", tileset, 0, 0);
+    this.terrainLayer = map.createLayer("terrain", tileset, 0, 0);
 
-    this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    // Set up collision detection on collision layer
+    if (this.collisionLayer) {
+      this.collisionLayer.setCollision([
+        ...COLLISION_TILES.obstacles,
+        ...COLLISION_TILES.buildings,
+      ]);
+    }
 
+    // Set up collision detection on elevation layer
+    if (this.elevationLayer) {
+      this.elevationLayer.setCollision(COLLISION_TILES.elevation);
+    }
+
+    // Combine static layers into render texture for performance
+    if (groundLayer && this.elevationLayer) {
+      const staticLayersTexture = this.add.renderTexture(
+        0,
+        0,
+        this.mapWidth,
+        this.mapHeight
+      );
+      staticLayersTexture.setDepth(-1);
+      staticLayersTexture.draw(groundLayer, 0, 0);
+      staticLayersTexture.draw(this.elevationLayer, 0, 0);
+
+      groundLayer.setVisible(true);
+      this.elevationLayer.setVisible(true);
+    }
+
+    if (this.collisionLayer) {
+      this.collisionLayer.setVisible(true);
+    }
+
+    if (this.terrainLayer) {
+      this.terrainLayer.setVisible(true);
+    }
+
+    // Set camera bounds to map size
+    this.cameras.main.setBounds(0, 0, this.mapWidth, this.mapHeight);
+
+    // Create local player (initially invisible until server confirms position)
     this.localPlayer = this.add.circle(
-      MAP_WIDTH / 2,
-      MAP_HEIGHT / 2,
+      this.mapWidth / 2,
+      this.mapHeight / 2,
       PLAYER_RADIUS,
       0x4a9eff
     );
     this.localPlayer.setData("playerId", "local");
-    this.localPlayer.setVisible(false); // Hidden until we get server position
+    this.localPlayer.setVisible(false);
+    this.localPlayer.setDepth(10); // Ensure player renders above terrain
 
-    // Camera follows player tightly to avoid drift perception
+    // Camera follows player
     this.cameras.main.startFollow(this.localPlayer, true, 0.5, 0.5);
 
+    // Set up keyboard input
     this.cursors = this.input.keyboard?.createCursorKeys() || null;
 
+    // Subscribe to multiplayer events
     EventBus.on("multiplayer-game-state", this.handleGameState, this);
     EventBus.on("multiplayer-player-joined", this.handlePlayerJoined, this);
     EventBus.on("multiplayer-player-left", this.handlePlayerLeft, this);
 
+    // Tell server we want to join
     EventBus.emit("send-player-join");
 
     // Create minimap
     this.minimap = new Minimap(this, {
-      worldWidth: MAP_WIDTH,
-      worldHeight: MAP_HEIGHT,
+      worldWidth: this.mapWidth,
+      worldHeight: this.mapHeight,
       width: 150,
-      height: 150,
+      height: Math.floor(150 * (this.mapHeight / this.mapWidth)), // Maintain aspect ratio
     });
 
-    // Render terrain zones on minimap
-    this.renderTerrainOnMinimap();
+    // Render collision and elevation layers on minimap
+    if (this.collisionLayer && this.elevationLayer) {
+      this.minimap.renderLayers(this.collisionLayer, this.elevationLayer);
+    }
 
     EventBus?.emit("current-scene-ready", this);
-  }
-
-  /**
-   * Draw terrain zones on the game world
-   */
-  private drawTerrainZones(): void {
-    const terrainGraphics = this.add.graphics();
-
-    for (const zone of this.terrainZones) {
-      const color =
-        zone.type === "water" ? TERRAIN_COLORS.WATER : TERRAIN_COLORS.SLOWDOWN;
-      const alpha = zone.type === "water" ? 0.8 : 0.6;
-
-      // Fill the zone
-      terrainGraphics.fillStyle(color, alpha);
-      terrainGraphics.fillRect(zone.x, zone.y, zone.width, zone.height);
-
-      // Add a border
-      terrainGraphics.lineStyle(2, color, 1);
-      terrainGraphics.strokeRect(zone.x, zone.y, zone.width, zone.height);
-    }
-  }
-
-  /**
-   * Render terrain zones on the minimap
-   */
-  private renderTerrainOnMinimap(): void {
-    if (!this.minimap) return;
-
-    this.minimap.renderTerrainZones(
-      this.terrainZones.map((zone) => ({
-        x: zone.x,
-        y: zone.y,
-        width: zone.width,
-        height: zone.height,
-        color:
-          zone.type === "water"
-            ? TERRAIN_COLORS.WATER
-            : TERRAIN_COLORS.SLOWDOWN,
-      }))
-    );
   }
 
   update(_time: number, delta: number) {
@@ -172,12 +166,14 @@ export default class MultiplayerGameScene extends Scene {
       moveRight: this.cursors.right?.isDown || false,
     };
 
-    // Client side movement locally for immediate feedback, but server is authority
+    // Client-side prediction for immediate feedback (server is authoritative)
     if (this.localPlayer.visible) {
-      // Check current terrain and get speed modifier
-      this.updateTerrainEffects(this.localPlayer.x, this.localPlayer.y);
-      const currentSpeed =
-        this.currentSpeedModifier < 1.0 ? SLOWDOWN_SPEED : PLAYER_SPEED;
+      // Check if player is in a slowdown zone
+      const inSlowdown = this.isInSlowdownZone(
+        this.localPlayer.x,
+        this.localPlayer.y
+      );
+      const currentSpeed = inSlowdown ? SLOWDOWN_SPEED : PLAYER_SPEED;
 
       let velocityX = 0;
       let velocityY = 0;
@@ -191,13 +187,21 @@ export default class MultiplayerGameScene extends Scene {
       let newX = this.localPlayer.x + velocityX * deltaSeconds;
       let newY = this.localPlayer.y + velocityY * deltaSeconds;
 
-      // Clamp to map boundaries first
-      newX = Phaser.Math.Clamp(newX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
-      newY = Phaser.Math.Clamp(newY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+      // Clamp to map boundaries
+      newX = Phaser.Math.Clamp(
+        newX,
+        PLAYER_RADIUS,
+        this.mapWidth - PLAYER_RADIUS
+      );
+      newY = Phaser.Math.Clamp(
+        newY,
+        PLAYER_RADIUS,
+        this.mapHeight - PLAYER_RADIUS
+      );
 
-      // Check for water collision - allow sliding along edges
-      const canMoveX = !this.isInWater(newX, this.localPlayer.y);
-      const canMoveY = !this.isInWater(this.localPlayer.x, newY);
+      // Check for collision using tilemap layers
+      const canMoveX = !this.isColliding(newX, this.localPlayer.y);
+      const canMoveY = !this.isColliding(this.localPlayer.x, newY);
 
       if (canMoveX) {
         this.localPlayer.x = newX;
@@ -208,7 +212,6 @@ export default class MultiplayerGameScene extends Scene {
     }
 
     // Send input changes to server (event-based, only when input changes)
-    // Check each input individually and only send what changed
     if (currentInput.moveUp !== this.lastInputState.moveUp) {
       EventBus.emit("send-input-change", {
         input: "moveUp",
@@ -238,9 +241,62 @@ export default class MultiplayerGameScene extends Scene {
       this.lastInputState.moveRight = currentInput.moveRight;
     }
 
+    // Update minimap
     if (this.minimap && this.localPlayer.visible) {
       this.minimap.update(this.localPlayer.x, this.localPlayer.y);
     }
+  }
+
+  /**
+   * Check if a position collides with any collision tiles
+   */
+  private isColliding(x: number, y: number): boolean {
+    // Check collision layer
+    if (this.collisionLayer) {
+      const tile = this.collisionLayer.getTileAtWorldXY(x, y);
+      if (tile && tile.collides) {
+        return true;
+      }
+    }
+
+    // Check elevation layer
+    if (this.elevationLayer) {
+      const tile = this.elevationLayer.getTileAtWorldXY(x, y);
+      if (tile && tile.collides) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a position is in a slowdown zone (quicksand, mud, etc.)
+   * Returns true if the tile at position is a slowdown tile
+   */
+  private isInSlowdownZone(x: number, y: number): boolean {
+    // No slowdown tiles defined yet - will be used when you add them to the tilemap
+    if (COLLISION_TILES.slowdown.length === 0) {
+      return false;
+    }
+
+    // Check terrain layer for slowdown tiles
+    if (this.terrainLayer) {
+      const tile = this.terrainLayer.getTileAtWorldXY(x, y);
+      if (tile && COLLISION_TILES.slowdown.includes(tile.index)) {
+        return true;
+      }
+    }
+
+    // Also check collision layer for slowdown tiles
+    if (this.collisionLayer) {
+      const tile = this.collisionLayer.getTileAtWorldXY(x, y);
+      if (tile && COLLISION_TILES.slowdown.includes(tile.index)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   handleSetLocalPlayerId(data: { playerId: string }) {
@@ -263,8 +319,7 @@ export default class MultiplayerGameScene extends Scene {
             this.localPlayer.setVisible(true);
           }
 
-          // Server reconciliation: correct client position towards server truth
-          // Server now handles terrain collision, so we can trust server positions
+          // Correct client position towards server truth
           const distance = Phaser.Math.Distance.Between(
             this.localPlayer.x,
             this.localPlayer.y,
@@ -318,6 +373,7 @@ export default class MultiplayerGameScene extends Scene {
 
     const player = this.add.circle(data.x, data.y, PLAYER_RADIUS, 0xff4444);
     player.setData("playerId", data.playerId);
+    player.setDepth(10); // Ensure player renders above terrain
     this.players.set(data.playerId, player);
 
     const label = this.add
@@ -327,7 +383,8 @@ export default class MultiplayerGameScene extends Scene {
         backgroundColor: "#000000",
         padding: { x: 4, y: 2 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(11);
 
     player.setData("label", label);
 
@@ -369,47 +426,6 @@ export default class MultiplayerGameScene extends Scene {
 
   resize(gameSize: GameObjects.Components.Size) {
     this.cameras.resize(gameSize.width, gameSize.height);
-  }
-
-  /**
-   * Check if a position (with player radius) collides with a water zone
-   */
-  private isInWater(x: number, y: number): boolean {
-    for (const zone of this.terrainZones) {
-      if (zone.type !== "water") continue;
-
-      // Check if player circle overlaps with water rectangle
-      // Account for player radius on all sides
-      if (
-        x + PLAYER_RADIUS > zone.x &&
-        x - PLAYER_RADIUS < zone.x + zone.width &&
-        y + PLAYER_RADIUS > zone.y &&
-        y - PLAYER_RADIUS < zone.y + zone.height
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Check terrain effects at position and update speed modifier
-   */
-  private updateTerrainEffects(x: number, y: number): void {
-    for (const zone of this.terrainZones) {
-      if (zone.type !== "slowdown") continue;
-
-      if (
-        x >= zone.x &&
-        x <= zone.x + zone.width &&
-        y >= zone.y &&
-        y <= zone.y + zone.height
-      ) {
-        this.currentSpeedModifier = 0.4;
-        return;
-      }
-    }
-    this.currentSpeedModifier = 1.0;
   }
 
   destroy() {

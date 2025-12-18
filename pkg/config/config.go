@@ -20,6 +20,7 @@ type Config struct {
 	DBConnURI      string
 	RedisURL       string
 	RedisOpts      *redis.Options
+	MapPath        string
 }
 
 // Load parses the command-line arguments into the Config struct
@@ -31,6 +32,7 @@ func (c *Config) Load(args []string) error {
 	fs.StringVar(&c.DBConnURI, "DATABASE_URL", "postgresql://postgres:postgres@db/wizardwarriors", "database connection uri")
 	fs.StringVar(&c.RedisURL, "REDIS_URL", "redis://localhost:6379/0", "redis url")
 	fs.IntVar(&c.SessionMaxAge, "SESSION_MAX_AGE", 86400, "session cookie max age in seconds (default: 86400 = 24 hours)")
+	fs.StringVar(&c.MapPath, "MAP_PATH", "pkg/hub/assets/multiplayer_map.json", "path to the game map JSON file")
 
 	var allowedOrigins string
 	fs.StringVar(&allowedOrigins, "ALLOWED_ORIGINS", "http://ww.dev.localhost,http://localhost:3000", "comma-separated list of allowed origins for CORS")
