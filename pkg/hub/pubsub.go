@@ -48,11 +48,12 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 
 	for chName, pubsubCh := range hub.pubsub.subscriptions {
 		go func(space Space, ch *redis.PubSub) {
+			msgChan := ch.Channel()
 			for {
 				select {
 				case <-ctx.Done():
 					return
-				case msg, ok := <-ch.Channel():
+				case msg, ok := <-msgChan:
 					if !ok {
 						return
 					}

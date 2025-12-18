@@ -31,6 +31,7 @@ type Hub struct {
 
 	redis            *redis.Client
 	pubsub           *PubSub
+	pubsubEnabled    bool
 	gameStateManager *GameStateManager
 }
 
@@ -53,8 +54,9 @@ func New(cfg *config.Config) (*Hub, error) {
 
 		clients: make(map[*Client]bool),
 
-		redis:  pubsub.conn,
-		pubsub: pubsub,
+		redis:         pubsub.conn,
+		pubsub:        pubsub,
+		pubsubEnabled: !cfg.DisablePubSub,
 	}
 
 	ctx := context.Background()
@@ -70,7 +72,9 @@ func New(cfg *config.Config) (*Hub, error) {
 }
 
 func (hub *Hub) Run(ctx context.Context) {
-	go hub.ListenPubSub(ctx)
+	if hub.pubsubEnabled {
+		go hub.ListenPubSub(ctx)
+	}
 
 	for {
 		select {
