@@ -35,6 +35,7 @@ interface MultiplayerPhaserGameProps {
     userInfo: { id: number; username: string },
     reconnect: (newToken: string) => Promise<void>
   ) => void;
+  onLeave?: () => void;
 }
 
 const multiplayerConfig: Types.Core.GameConfig = {
@@ -79,13 +80,21 @@ const MultiplayerPhaserGame = ({
   isGuest = false,
   guestId,
   onLoginSuccess,
+  onLeave,
 }: MultiplayerPhaserGameProps) => {
   const gameRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<IRefPhaserGame>({ game: null, scene: null });
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  const { ws, isConnected, isConnecting, error, connect, reconnectWithToken } =
-    useSocket();
+  const {
+    ws,
+    isConnected,
+    isConnecting,
+    error,
+    connect,
+    disconnect,
+    reconnectWithToken,
+  } = useSocket();
   const gameStats = useAtomValue(gameStatsAtom);
 
   const [isReady, setIsReady] = useState(false);
@@ -511,6 +520,30 @@ const MultiplayerPhaserGame = ({
                   Sign In
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  disconnect();
+                  onLeave?.();
+                }}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  marginTop: "8px",
+                  backgroundColor: "#666",
+                  border: "none",
+                  borderRadius: "4px",
+                  color: "white",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Leave
+              </button>
             </>
           )}
         </div>

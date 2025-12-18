@@ -245,20 +245,39 @@ const PlayerForm = ({
 
   if (saves) {
     return (
-      <div className={styles.savesContainer}>
-        <h2>Player Saves</h2>
-        <div className={styles.savesGrid}>
+      <div
+        className={styles.savesContainer}
+        role="region"
+        aria-labelledby="saves-heading"
+      >
+        <h2 id="saves-heading">Player Saves</h2>
+        <div
+          className={styles.savesGrid}
+          role="listbox"
+          aria-label="Select a saved game"
+        >
           {saves.map((save) => {
             const isDisabled = !save.game_is_active || save.is_game_over;
+            const isSelected = selectedSave?.game_id === save.game_id;
 
             return (
               <div
                 key={save.game_id}
-                className={`${styles.save} ${selectedSave?.game_id === save.game_id ? styles.selectedSave : ""} ${
+                role="option"
+                aria-selected={isSelected}
+                aria-disabled={isDisabled}
+                tabIndex={isDisabled ? -1 : 0}
+                className={`${styles.save} ${isSelected ? styles.selectedSave : ""} ${
                   isDisabled ? styles.disabledSave : ""
                 }`}
                 onClick={() => {
                   if (!isDisabled) handleSaveSelection(save);
+                }}
+                onKeyDown={(e) => {
+                  if (!isDisabled && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    handleSaveSelection(save);
+                  }
                 }}
               >
                 <p>Game ID: {save.game_id}</p>
@@ -332,28 +351,44 @@ const PlayerForm = ({
   }
 
   return (
-    <form className={styles.form}>
-      <div className={styles.errorContainer}>
-        {error && <p className={styles.error}>{error}</p>}
+    <form className={styles.form} aria-label="Player login form">
+      <div className={styles.errorContainer} aria-live="polite" role="alert">
+        {error && (
+          <p id="form-error" className={styles.error}>
+            {error}
+          </p>
+        )}
       </div>
+      <label htmlFor="username" className="visually-hidden">
+        Player name
+      </label>
       <input
+        id="username"
         name="username"
         autoComplete="username"
         className={`${styles.input} ${error ? styles.inputError : ""}`}
         placeholder="Player name"
         value={username}
+        aria-describedby={error ? "form-error" : undefined}
+        aria-invalid={error ? "true" : undefined}
         onChange={(e) => {
           setUsername(e.target.value);
           if (error) setError("");
         }}
       />
+      <label htmlFor="password" className="visually-hidden">
+        Password
+      </label>
       <input
+        id="password"
         name="password"
-        autoComplete="false"
+        autoComplete="current-password"
         className={`${styles.input} ${error ? styles.inputError : ""}`}
         placeholder="Password"
         type="password"
         value={password}
+        aria-describedby={error ? "form-error" : undefined}
+        aria-invalid={error ? "true" : undefined}
         onChange={(e) => {
           setPassword(e.target.value);
           if (error) setError("");
@@ -361,20 +396,33 @@ const PlayerForm = ({
       />
       <div className={styles.buttonContainer}>
         <button
+          type="submit"
           className={styles.button}
-          aria-label="Login"
           disabled={disableButton || loginMutation.isPending}
           onClick={login}
         >
           {loginMutation.isPending ? "Logging in..." : "Login"}
         </button>
         <button
+          type="button"
           className={`${styles.button} ${styles.grayButton}`}
-          aria-label="Register"
           disabled={disableButton || registerMutation.isPending}
           onClick={register}
         >
           {registerMutation.isPending ? "Registering..." : "Register"}
+        </button>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonMultiplayer}`}
+          onClick={(e) => {
+            e.preventDefault();
+            joinMultiplayerQuery.refetch();
+          }}
+          disabled={joinMultiplayerQuery.isFetching}
+        >
+          {joinMultiplayerQuery.isFetching
+            ? "Connecting..."
+            : "Play Multiplayer"}
         </button>
       </div>
     </form>

@@ -2,6 +2,7 @@ import useApiService from "@hooks/useApiService";
 import { useQuery } from "@tanstack/react-query";
 import { useAtom } from "jotai";
 import Image from "next/image";
+import { useRouter } from "next/router";
 import { NextPage } from "next/types";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { gameStatsAtom } from "src/state";
@@ -12,6 +13,7 @@ const MultiplayerPhaserGame = lazy(
 );
 
 const MultiplayerPage: NextPage = () => {
+  const router = useRouter();
   const apiService = useApiService();
   const [_gameStats, setGameStats] = useAtom(gameStatsAtom);
   const [token, setToken] = useState<string | null>(null);
@@ -19,6 +21,40 @@ const MultiplayerPage: NextPage = () => {
   const [isGuest, setIsGuest] = useState(false);
   const [guestId, setGuestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  // Clear multiplayer session data
+  const clearMultiplayerSession = useCallback(() => {
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("isGuest");
+    sessionStorage.removeItem("guestId");
+  }, []);
+
+  // Handle route changes and browser back button
+  useEffect(() => {
+    const handleRouteChange = (url: string) => {
+      // Only clear session when navigating away from multiplayer
+      if (!url.includes("/multiplayer")) {
+        clearMultiplayerSession();
+      }
+    };
+
+    // Handle browser back/forward buttons
+    const handlePopState = () => {
+      setIsLeaving(true);
+      clearMultiplayerSession();
+      // Force navigation to home page
+      window.location.href = "/";
+    };
+
+    router.events.on("routeChangeStart", handleRouteChange);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChange);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [router.events, clearMultiplayerSession]);
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem("token");
@@ -42,12 +78,14 @@ const MultiplayerPage: NextPage = () => {
       const existingGuestId = sessionStorage.getItem("guestId");
       return apiService.joinMultiplayer(existingGuestId || undefined);
     },
-    enabled: !!apiService && !token,
+    enabled: !!apiService && !token && !isLeaving,
     retry: false,
   });
 
   // Handle join multiplayer result
   useEffect(() => {
+    if (isLeaving) return;
+
     if (joinMultiplayerQuery.isSuccess && joinMultiplayerQuery.data?.success) {
       const data = joinMultiplayerQuery.data.data;
       if (data) {
@@ -79,9 +117,9 @@ const MultiplayerPage: NextPage = () => {
     joinMultiplayerQuery.isError,
     joinMultiplayerQuery.data,
     setGameStats,
+    isLeaving,
   ]);
 
-  // Callback when guest logs in via modal
   const handleLoginSuccess = useCallback(
     async (
       userInfo: { id: number; username: string },
@@ -115,6 +153,12 @@ const MultiplayerPage: NextPage = () => {
     },
     [apiService, setGameStats]
   );
+
+  const handleLeave = useCallback(() => {
+    setIsLeaving(true);
+    clearMultiplayerSession();
+    window.location.href = "/";
+  }, [clearMultiplayerSession]);
 
   if (error) {
     return (
@@ -182,6 +226,7 @@ const MultiplayerPage: NextPage = () => {
       <MultiplayerPhaserGame
         token={token}
         isGuest={isGuest}
+        onLeave={handleLeave}
         guestId={guestId}
         onLoginSuccess={handleLoginSuccess}
       />
