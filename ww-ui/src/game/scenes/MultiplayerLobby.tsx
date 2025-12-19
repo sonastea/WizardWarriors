@@ -23,7 +23,7 @@ export default class MultiplayerLobbyScene extends Scene {
       .setOrigin(0, 0);
 
     this.add
-      .text(centerX, centerY - 100, "Multiplayer Lobby", {
+      .text(centerX, centerY - 100, "WizardWarriors Lobby", {
         fontSize: "48px",
         fontStyle: "bold",
         color: "#ffffff",
