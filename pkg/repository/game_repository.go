@@ -25,6 +25,7 @@ type GameRepository interface {
 	JoinMultiplayer(ctx context.Context, userID uint64, username string) (GameSessionToken, error)
 	JoinMultiplayerAsGuest(ctx context.Context, guestID string) (GameSessionToken, string, error)
 	GetSessionInfo(ctx context.Context, token string) (*GameSessionInfo, error)
+	RefreshSession(ctx context.Context, token string) error
 	GetPlayerSave(ctx context.Context, gameID int) (*entity.PlayerSave, error)
 	GetPlayerSavesByUserID(ctx context.Context, userID int) ([]entity.PlayerSave, error)
 	GetLeaderboard(ctx context.Context) ([]entity.GameStats, error)
@@ -402,4 +403,23 @@ func (r *gameRepository) GetSessionInfo(ctx context.Context, token string) (*Gam
 		UserID:   result["user_id"],
 		Username: result["username"],
 	}, nil
+}
+
+// RefreshSession extends the TTL of a game session token
+func (r *gameRepository) RefreshSession(ctx context.Context, token string) error {
+	key := "gamesession:token:" + token
+	exists, err := r.redis.Exists(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("failed to check session existence: %w", err)
+	}
+	if exists == 0 {
+		return fmt.Errorf("session not found or expired")
+	}
+
+	// Extend the TTL
+	if err := r.redis.Expire(ctx, key, 30*time.Minute).Err(); err != nil {
+		return fmt.Errorf("failed to refresh session: %w", err)
+	}
+
+	return nil
 }

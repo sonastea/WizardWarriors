@@ -2,12 +2,12 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/lithammer/shortuuid"
 	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -33,32 +33,36 @@ type Client struct {
 	Username string `json:"username,omitempty"`
 	conn     *websocket.Conn
 
-	hub *Hub
+	hub   *Hub
+	token string
 
 	sendChan chan []byte
 }
 
 func NewClient(hub *Hub, conn *websocket.Conn, token string) error {
-	newId := shortuuid.New()
-	username := "Unknown"
-	userID := newId
+	// Require a valid token for WebSocket connections
+	if token == "" {
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Missing session token"))
+		conn.Close()
+		return fmt.Errorf("missing session token")
+	}
 
-	// Look up user info from token if provided
-	if token != "" {
-		sessionInfo, err := hub.GetSessionInfo(token)
-		if err == nil && sessionInfo != nil {
-			userID = sessionInfo.UserID
-			username = sessionInfo.Username
-		} else {
-			log.Printf("Failed to get session info for token: %v", err)
-		}
+	sessionInfo, err := hub.GetSessionInfo(token)
+	if err != nil || sessionInfo == nil {
+		log.Printf("Failed to get session info for token: %v", err)
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Invalid or expired session"))
+		conn.Close()
+		return fmt.Errorf("invalid or expired session: %w", err)
 	}
 
 	client := &Client{
-		UserID:   userID,
-		Username: username,
+		UserID:   sessionInfo.UserID,
+		Username: sessionInfo.Username,
 		hub:      hub,
 		conn:     conn,
+		token:    token,
 		sendChan: make(chan []byte),
 	}
 
@@ -87,7 +91,15 @@ func (client *Client) readPump() {
 
 	client.conn.SetReadLimit(maxMessageSize)
 	client.conn.SetReadDeadline(time.Now().Add(pongWait))
-	client.conn.SetPongHandler(func(string) error { client.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	client.conn.SetPongHandler(func(string) error {
+		client.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if client.token != "" {
+			if err := client.hub.RefreshSession(client.token); err != nil {
+				log.Printf("Failed to refresh session for %s: %v", client.Username, err)
+			}
+		}
+		return nil
+	})
 
 	client.conn.SetCloseHandler(func(code int, text string) error {
 		message := websocket.FormatCloseMessage(code, "Goodbye! Connection closing.")

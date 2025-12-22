@@ -56,17 +56,13 @@ const MultiplayerPage: NextPage = () => {
     };
   }, [router.events, clearMultiplayerSession]);
 
+  // Always fetch a fresh token on page load to avoid using expired cached tokens
+  // We only preserve guestId for guest user continuity
   useEffect(() => {
-    const storedToken = sessionStorage.getItem("token");
-    const storedIsGuest = sessionStorage.getItem("isGuest") === "true";
-    const storedGuestId = sessionStorage.getItem("guestId");
-
-    if (storedToken) {
-      setToken(storedToken);
-      setIsGuest(storedIsGuest);
-      if (storedGuestId) setGuestId(storedGuestId);
-      setIsReady(true);
-    }
+    // Clear potentially expired token, we'll get a fresh one from joinMultiplayerQuery
+    sessionStorage.removeItem("token");
+    // Keep guestId for guest reconnection, but clear isGuest flag to force re-auth
+    sessionStorage.removeItem("isGuest");
   }, []);
 
   // Join multiplayer - this handles both authenticated and guest users

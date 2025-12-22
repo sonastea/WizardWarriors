@@ -169,6 +169,27 @@ func (hub *Hub) GetSessionInfo(token string) (*SessionInfo, error) {
 	}, nil
 }
 
+// RefreshSession extends the TTL of a game session token
+func (hub *Hub) RefreshSession(token string) error {
+	ctx := context.Background()
+	key := "gamesession:token:" + token
+	// Check if the session exists before refreshing
+	exists, err := hub.redis.Exists(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("failed to check session existence: %w", err)
+	}
+	if exists == 0 {
+		return fmt.Errorf("session not found or expired")
+	}
+
+	// Extend the TTL to 30 minutes
+	if err := hub.redis.Expire(ctx, key, 30*time.Minute).Err(); err != nil {
+		return fmt.Errorf("failed to refresh session: %w", err)
+	}
+
+	return nil
+}
+
 // MoveUserToGame moves a user from the lobby set to the game set in Redis
 func (hub *Hub) MoveUserToGame(userId string) error {
 	ctx := context.Background()
