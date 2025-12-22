@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/sonastea/WizardWarriors/pkg/entity"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 	"github.com/sonastea/WizardWarriors/pkg/service"
 )
 
@@ -123,7 +123,7 @@ func (h *ApiHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := h.apiService.Register(r.Context(), credentials.Username, credentials.Password)
 	if err != nil {
-		log.Printf("Registration error: %v", err)
+		logger.Warn("Registration error: %v", err)
 		if strings.Contains(err.Error(), "already exists") {
 			writeJSON(w, http.StatusConflict, errorResponse(err.Error()))
 		} else if strings.Contains(err.Error(), "cannot be empty") || strings.Contains(err.Error(), "must be at least") {
@@ -161,14 +161,14 @@ func (h *ApiHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := h.apiService.Login(r.Context(), credentials.Username, credentials.Password)
 	if err != nil {
-		log.Printf("Login error: %v", err)
+		logger.Debug("Login error: %v", err)
 		writeJSON(w, http.StatusUnauthorized, errorResponse("Invalid username or password"))
 		return
 	}
 
 	saves, err := h.apiService.GetPlayerSaves(r.Context(), userID)
 	if err != nil {
-		log.Printf("Error getting player saves: %v", err)
+		logger.Error("Error getting player saves: %v", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to get player saves"))
 		return
 	}
@@ -203,7 +203,7 @@ func (h *ApiHandler) GetPlayerSaves(w http.ResponseWriter, r *http.Request) {
 
 	saves, err := h.apiService.GetPlayerSaves(r.Context(), userID)
 	if err != nil {
-		log.Printf("Error getting player saves: %v", err)
+		logger.Error("Error getting player saves: %v", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to get player saves"))
 		return
 	}
@@ -233,7 +233,7 @@ func (h *ApiHandler) GetPlayerSave(w http.ResponseWriter, r *http.Request) {
 
 	save, err := h.apiService.GetPlayerSave(r.Context(), req.GameID)
 	if err != nil {
-		log.Printf("Error getting player save: %v", err)
+		logger.Error("Error getting player save: %v", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse(err.Error()))
 		return
 	}
@@ -279,7 +279,7 @@ func (h *ApiHandler) SaveGame(w http.ResponseWriter, r *http.Request) {
 
 	saved, err := h.apiService.SaveGame(r.Context(), userID, &gameStats)
 	if err != nil {
-		log.Printf("Error saving game: %v", err)
+		logger.Error("Error saving game: %v", err)
 		if strings.Contains(err.Error(), "unauthorized") {
 			writeJSON(w, http.StatusForbidden, errorResponse("You are not authorized to save this game"))
 		} else {
@@ -300,7 +300,7 @@ func (h *ApiHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	leaderboard, err := h.apiService.GetLeaderboard(context.Background())
 	if err != nil {
-		log.Printf("Error getting leaderboard: %v", err)
+		logger.Error("Error getting leaderboard: %v", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse("Failed to get leaderboard"))
 		return
 	}
@@ -322,7 +322,7 @@ func (h *ApiHandler) JoinMultiplayer(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// If join fails, fall through to guest flow
-			log.Printf("Authenticated join failed, falling back to guest: %v", joinErr)
+			logger.Debug("Authenticated join failed, falling back to guest: %v", joinErr)
 		}
 	}
 
@@ -369,7 +369,7 @@ func (h *ApiHandler) ValidateSession(w http.ResponseWriter, r *http.Request) {
 
 	userInfo, err := h.apiService.ValidateSession(r.Context(), userID)
 	if err != nil {
-		log.Printf("Session validation error: %v", err)
+		logger.Debug("Session validation error: %v", err)
 		writeJSON(w, http.StatusUnauthorized, errorResponse("Session invalid"))
 		return
 	}

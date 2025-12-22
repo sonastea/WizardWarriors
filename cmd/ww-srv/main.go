@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,6 +10,7 @@ import (
 	db "github.com/sonastea/WizardWarriors/pkg/database"
 	"github.com/sonastea/WizardWarriors/pkg/handler"
 	"github.com/sonastea/WizardWarriors/pkg/hub"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 	"github.com/sonastea/WizardWarriors/pkg/repository"
 	"github.com/sonastea/WizardWarriors/pkg/server"
 	"github.com/sonastea/WizardWarriors/pkg/service"
@@ -23,6 +23,10 @@ func main() {
 	cfg.Load(os.Args[1:])
 	cfg.RedisOpts = config.NewRedisOpts(cfg.RedisURL)
 	cfg.IsAPIServer = true
+
+	if err := logger.SetLevelFromString(cfg.LogLevel); err != nil {
+		logger.Warn("Invalid log level '%s', using default 'info'", cfg.LogLevel)
+	}
 
 	redisClient := redis.NewClient(cfg.RedisOpts)
 
@@ -52,7 +56,7 @@ func main() {
 		server.WithApiHandler(apiHandler),
 	)
 	if err != nil {
-		log.Fatalln("Unable to create server:", err)
+		logger.Fatal("Unable to create server: %v", err)
 	}
 
 	apiSrv.Start()

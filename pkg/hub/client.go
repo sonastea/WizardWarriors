@@ -3,12 +3,12 @@ package hub
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -50,7 +50,7 @@ func NewClient(hub *Hub, conn *websocket.Conn, token string) error {
 
 	sessionInfo, err := hub.GetSessionInfo(token)
 	if err != nil || sessionInfo == nil {
-		log.Printf("Failed to get session info for token: %v", err)
+		logger.Warn("Failed to get session info for token: %v", err)
 		conn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Invalid or expired session"))
 		conn.Close()
@@ -95,7 +95,7 @@ func (client *Client) readPump() {
 		client.conn.SetReadDeadline(time.Now().Add(pongWait))
 		if client.token != "" {
 			if err := client.hub.RefreshSession(client.token); err != nil {
-				log.Printf("Failed to refresh session for %s: %v", client.Username, err)
+				logger.Debug("Failed to refresh session for %s: %v", client.Username, err)
 			}
 		}
 		return nil
@@ -114,9 +114,9 @@ func (client *Client) readPump() {
 				websocket.CloseGoingAway,
 				websocket.CloseAbnormalClosure,
 				websocket.CloseNormalClosure) {
-				log.Printf("error: %v", err)
+				logger.Error("WebSocket error: %v", err)
 			}
-			log.Printf("%s (%s) disconnected", client.Username, client.UserID)
+			logger.Info("%s (%s) disconnected", client.Username, client.UserID)
 
 			// Handle player leaving - notify game state using their UserID
 			client.hub.gameStateManager.RemovePlayer(client.UserID)
@@ -147,7 +147,7 @@ func (client *Client) injectSenderInfo(message []byte) []byte {
 			// Re-marshal the modified message
 			modified, err := proto.Marshal(gameMsg)
 			if err != nil {
-				log.Printf("Failed to marshal modified chat message: %v", err)
+				logger.Error("Failed to marshal modified chat message: %v", err)
 				return message
 			}
 			return modified

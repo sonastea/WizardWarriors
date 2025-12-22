@@ -12,6 +12,7 @@ import {
 } from "@common/gen/multiplayer/v1/player_pb";
 import { useSocket } from "@contexts/Socket";
 import usePhaserGame from "@hooks/usePhaserGame";
+import { logger } from "@utils/logger";
 import { useAtomValue } from "jotai";
 import { Types } from "phaser";
 import { RefObject, useCallback, useEffect, useRef, useState } from "react";
@@ -255,15 +256,15 @@ const MultiplayerPhaserGame = ({
           case GameMessageType.ANNOUNCEMENT:
             if (msg.payload.case === "chatAnnouncement") {
               const announcement = msg.payload.value;
-              console.log("Announcement:", announcement.text);
+              logger.info("Announcement:", announcement.text);
             }
             break;
 
           default:
-            console.log("Unknown message type:", msg.type);
+            logger.warn("Unknown message type:", msg.type);
         }
       } catch (err) {
-        console.error("Failed to parse websocket message:", err);
+        logger.error("Failed to parse websocket message:", err);
       }
     };
 

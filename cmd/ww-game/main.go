@@ -1,13 +1,13 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/websocket"
 	"github.com/sonastea/WizardWarriors/pkg/config"
 	"github.com/sonastea/WizardWarriors/pkg/hub"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 	"github.com/sonastea/WizardWarriors/pkg/server"
 )
 
@@ -25,6 +25,10 @@ func main() {
 	cfg.Load(os.Args[1:])
 	cfg.RedisOpts = config.NewRedisOpts(cfg.RedisURL)
 
+	if err := logger.SetLevelFromString(cfg.LogLevel); err != nil {
+		logger.Warn("Invalid log level '%s', using default 'info'", cfg.LogLevel)
+	}
+
 	h, err := hub.New(cfg)
 	if err != nil {
 		panic(err)
@@ -36,7 +40,7 @@ func main() {
 		server.WithWebSocket("/game", upgrader),
 	)
 	if err != nil {
-		log.Fatalln("Unable to create server:", err)
+		logger.Fatal("Unable to create server: %v", err)
 	}
 
 	gameSrv.Start()

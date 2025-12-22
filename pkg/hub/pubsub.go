@@ -3,13 +3,12 @@ package hub
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/sonastea/WizardWarriors/pkg/config"
-	"google.golang.org/protobuf/proto"
-
 	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
+	"github.com/sonastea/WizardWarriors/pkg/config"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
+	"google.golang.org/protobuf/proto"
 )
 
 type Space string
@@ -23,7 +22,7 @@ type PubSub struct {
 func NewPubSub(cfg *config.Config) (*PubSub, error) {
 	rdsClient := redis.NewClient(cfg.RedisOpts)
 	if rdsClient == nil {
-		log.Fatalln("Unable to create redis client")
+		logger.Fatal("Unable to create redis client")
 	}
 
 	subs := []Space{
@@ -60,21 +59,21 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 
 					gameMsg := &multiplayerv1.GameMessage{}
 					if err := proto.Unmarshal([]byte(msg.Payload), gameMsg); err != nil {
-						log.Printf("Failed to unmarshal GameMessage: %v", err)
+						logger.Error("Failed to unmarshal GameMessage: %v", err)
 						continue
 					}
 
 					switch gameMsg.Type {
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_CHAT_MESSAGE:
 						if chatMsg := gameMsg.GetChatMessage(); chatMsg != nil {
-							log.Printf("Chat from %v: %s", chatMsg.SenderId, chatMsg.Text)
+							logger.Info("Chat from %v: %s", chatMsg.SenderId, chatMsg.Text)
 							wire, _ := toWire(gameMsg)
 							hub.broadcastToClients(wire)
 						}
 
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_PLAYER_EVENT:
 						if playerEvent := gameMsg.GetPlayerEvent(); playerEvent != nil {
-							log.Printf("Player event: %v for player %v", playerEvent.Type, playerEvent.PlayerId)
+							logger.Debug("Player event: %v for player %v", playerEvent.Type, playerEvent.PlayerId)
 
 							switch playerEvent.Type {
 							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_JOIN:
@@ -94,7 +93,7 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 
 									// Move user from lobby to game in Redis
 									if err := hub.MoveUserToGame(userID); err != nil {
-										log.Printf("Failed to move user to game in Redis: %v", err)
+										logger.Error("Failed to move user to game in Redis: %v", err)
 									}
 
 									// Get the server-assigned position to send back
@@ -131,7 +130,7 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_MOVE:
 								// Deprecated: ignore position updates from clients
 								// Server is authoritative - only INPUT events affect movement
-								log.Printf("Ignoring deprecated MOVE event from %v", playerEvent.PlayerId)
+								logger.Warn("Ignoring deprecated MOVE event from %v", playerEvent.PlayerId)
 
 							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_LEAVE:
 								if playerEvent.PlayerId != nil {
@@ -139,7 +138,7 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 
 									// Remove user from game set in Redis (they'll be removed from lobby on disconnect)
 									if err := hub.redis.SRem(context.Background(), RedisKeyGameUsers, playerEvent.PlayerId.Value).Err(); err != nil {
-										log.Printf("Failed to remove user from game in Redis: %v", err)
+										logger.Error("Failed to remove user from game in Redis: %v", err)
 									}
 
 									wire, _ := toWire(gameMsg)
@@ -153,16 +152,16 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_GAME_STATE:
 						if gameState := gameMsg.GetGameState(); gameState != nil {
-							log.Printf("Game state update with %d players", len(gameState.Players))
+							logger.Debug("Game state update with %d players", len(gameState.Players))
 						}
 
 					case multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_ANNOUNCEMENT:
 						if announcement := gameMsg.GetChatAnnouncement(); announcement != nil {
-							log.Printf("Announcement: %s", announcement.Text)
+							logger.Info("Announcement: %s", announcement.Text)
 						}
 
 					default:
-						log.Printf("Unknown message type: %v", gameMsg.Type)
+						logger.Warn("Unknown message type: %v", gameMsg.Type)
 					}
 				}
 			}

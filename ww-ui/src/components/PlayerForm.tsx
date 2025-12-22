@@ -1,5 +1,6 @@
 import useApiService from "@hooks/useApiService";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { logger } from "@utils/logger";
 import { useAtom } from "jotai";
 import { useRouter } from "next/router";
 import React, { Dispatch, SetStateAction, useEffect, useState } from "react";
@@ -112,7 +113,7 @@ const PlayerForm = ({
           sessionStorage.setItem("token", token);
           router.push("/multiplayer");
         } catch (err) {
-          console.error("Failed to connect to multiplayer:", err);
+          logger.error("Failed to connect to multiplayer:", err);
           setError("Failed to connect to multiplayer server");
         }
       }

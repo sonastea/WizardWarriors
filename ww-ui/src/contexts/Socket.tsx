@@ -1,11 +1,12 @@
+import { logger } from "@utils/logger";
 import {
   createContext,
   ReactElement,
   ReactNode,
-  useContext,
   useCallback,
-  useState,
+  useContext,
   useRef,
+  useState,
 } from "react";
 
 interface ISocketContext {
@@ -50,7 +51,7 @@ export function SocketProvider({
   const connect = useCallback(
     async (token: string) => {
       if (isConnecting || isConnected) {
-        console.warn("Already connecting or connected");
+        logger.warn("Already connecting or connected");
         return;
       }
 
@@ -63,14 +64,14 @@ export function SocketProvider({
         websocket.binaryType = "arraybuffer";
 
         websocket.onopen = () => {
-          console.log("Connected to multiplayer game server");
+          logger.info("Connected to multiplayer game server");
           setIsConnected(true);
           setIsConnecting(false);
           setError(null);
         };
 
         websocket.onclose = (event) => {
-          console.log(
+          logger.info(
             "Disconnected from multiplayer server",
             event.code,
             event.reason
@@ -81,7 +82,7 @@ export function SocketProvider({
         };
 
         websocket.onerror = (event) => {
-          console.error("WebSocket error:", event);
+          logger.error("WebSocket error:", event);
           setError("Failed to connect to multiplayer server");
           setIsConnecting(false);
           setIsConnected(false);
@@ -89,7 +90,7 @@ export function SocketProvider({
 
         setWs(websocket);
       } catch (err) {
-        console.error("Connection error:", err);
+        logger.error("Connection error:", err);
         setError(
           err instanceof Error ? err.message : "Unknown connection error"
         );
@@ -132,14 +133,14 @@ export function SocketProvider({
         websocket.binaryType = "arraybuffer";
 
         websocket.onopen = () => {
-          console.log("Reconnected to multiplayer game server");
+          logger.info("Reconnected to multiplayer game server");
           setIsConnected(true);
           setIsConnecting(false);
           setError(null);
         };
 
         websocket.onclose = (event) => {
-          console.log(
+          logger.info(
             "Disconnected from multiplayer server",
             event.code,
             event.reason
@@ -150,7 +151,7 @@ export function SocketProvider({
         };
 
         websocket.onerror = (event) => {
-          console.error("WebSocket error:", event);
+          logger.error("WebSocket error:", event);
           setError("Failed to connect to multiplayer server");
           setIsConnecting(false);
           setIsConnected(false);
@@ -158,7 +159,7 @@ export function SocketProvider({
 
         setWs(websocket);
       } catch (err) {
-        console.error("Reconnection error:", err);
+        logger.error("Reconnection error:", err);
         setError(
           err instanceof Error ? err.message : "Unknown connection error"
         );

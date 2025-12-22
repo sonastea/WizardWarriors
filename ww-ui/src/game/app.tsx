@@ -1,4 +1,5 @@
 import usePhaserGame from "@hooks/usePhaserGame";
+import { logger } from "@utils/logger";
 import { RefObject, useEffect, useRef, useState } from "react";
 import { config } from "./config";
 import { EventBus } from "./EventBus";
@@ -51,7 +52,7 @@ const PhaserGame = ({ currentActiveScene }: PhaserGameProps) => {
   useEffect(() => {
     const handleSaveGame = async (stats: GameStats) => {
       const res = await apiService?.saveGame(stats);
-      console.log(res);
+      logger.debug("Save game response:", res);
     };
 
     EventBus.on("save-game", handleSaveGame);

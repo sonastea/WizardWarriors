@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +14,7 @@ import (
 	"github.com/sonastea/WizardWarriors/pkg/config"
 	"github.com/sonastea/WizardWarriors/pkg/handler"
 	"github.com/sonastea/WizardWarriors/pkg/hub"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 )
 
 type Server struct {
@@ -78,7 +78,7 @@ func WithWebSocket(path string, upgrader websocket.Upgrader) Option {
 		router.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			conn, err := upgrader.Upgrade(w, r, nil)
 			if err != nil {
-				log.Println(err)
+				logger.Error("WebSocket upgrade failed: %v", err)
 				return
 			}
 
@@ -86,7 +86,7 @@ func WithWebSocket(path string, upgrader websocket.Upgrader) Option {
 
 			err = hub.NewClient(s.hub, conn, token)
 			if err != nil {
-				log.Println(err)
+				logger.Warn("Failed to create client: %v", err)
 				return
 			}
 		})
@@ -156,7 +156,7 @@ func (s *Server) Start() {
 
 	go func() {
 		<-cleanup
-		log.Println("Received quit signal . . .")
+		logger.Info("Received quit signal . . .")
 
 		if hubCancel != nil {
 			hubCancel()
@@ -164,7 +164,7 @@ func (s *Server) Start() {
 
 		if s.redis != nil {
 			if err := s.redis.Close(); err != nil {
-				log.Printf("Error closing Redis connection: %v\n", err)
+				logger.Error("Error closing Redis connection: %v", err)
 			}
 		}
 
@@ -172,10 +172,10 @@ func (s *Server) Start() {
 		defer shutdownCancel()
 
 		if err := s.server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error during server shutdown: %v\n", err)
+			logger.Error("Error during server shutdown: %v", err)
 		}
 
-		log.Printf("%s shutdown complete.\n", s.serverName)
+		logger.Info("%s shutdown complete.", s.serverName)
 	}()
 
 	id := time.Now().Format("20060102-150405")
@@ -184,11 +184,11 @@ func (s *Server) Start() {
 	blueColor := "\033[94m"
 	boldText := "\033[1m"
 
-	log.Printf("[ID: %s%s%s%s] %s listening on %s\n",
+	logger.Info("[ID: %s%s%s%s] %s listening on %s",
 		boldText, blueColor, id, resetColor, s.serverName, s.server.Addr)
 
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("HTTP server ListenAndServe: %v [ID: %s%s%s%s]\n",
+		logger.Fatal("HTTP server ListenAndServe: %v [ID: %s%s%s%s]",
 			err, boldText, blueColor, id, resetColor)
 	}
 }

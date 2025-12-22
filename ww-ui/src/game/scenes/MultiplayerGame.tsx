@@ -1,4 +1,5 @@
 import { GameObjects, Scene, Tilemaps } from "phaser";
+import { logger } from "@utils/logger";
 import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
@@ -61,7 +62,7 @@ export default class MultiplayerGameScene extends Scene {
     const map = this.make.tilemap({ key: "map" });
     const tileset = map.addTilesetImage("DesertTilemap", "tiles");
     if (!tileset) {
-      console.error("Tileset not found");
+      logger.error("Tileset not found");
       return;
     }
 

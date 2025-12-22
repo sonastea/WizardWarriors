@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"os"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ type Config struct {
 
 	AllowedOrigins []string
 	Debug          bool
+	LogLevel       string
 	DBConnURI      string
 	RedisURL       string
 	RedisOpts      *redis.Options
@@ -44,6 +46,11 @@ func (c *Config) Load(args []string) error {
 	}
 
 	c.AllowedOrigins = parseOrigins(allowedOrigins)
+
+	c.LogLevel = os.Getenv("LOG_LEVEL")
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
 
 	return nil
 }

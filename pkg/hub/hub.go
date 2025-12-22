@@ -3,13 +3,13 @@ package hub
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
 	"github.com/sonastea/WizardWarriors/pkg/config"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -60,7 +60,7 @@ func New(cfg *config.Config) (*Hub, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load game map: %w", err)
 		}
-		log.Printf("Loaded game map: %dx%d tiles (%dx%d pixels)",
+		logger.Info("Loaded game map: %dx%d tiles (%dx%d pixels)",
 			gameMap.Width, gameMap.Height, int(gameMap.PixelWidth), int(gameMap.PixelHeight))
 
 		// Initialize game state manager with 30ms tick rate (33 updates/sec)
@@ -100,15 +100,15 @@ func (hub *Hub) addClient(client *Client) {
 	// Add user to lobby set in Redis
 	ctx := context.Background()
 	if err := hub.redis.SAdd(ctx, RedisKeyLobbyUsers, client.UserID).Err(); err != nil {
-		log.Printf("Failed to add user to lobby in Redis: %v", err)
+		logger.Error("Failed to add user to lobby in Redis: %v", err)
 	}
 
 	// Store the username mapping in Redis so we can look it up later
 	if err := hub.redis.HSet(ctx, "lobby:usernames", client.UserID, client.Username).Err(); err != nil {
-		log.Printf("Failed to store username in Redis: %v", err)
+		logger.Error("Failed to store username in Redis: %v", err)
 	}
 
-	log.Printf("%s (%s) connected - connection pool size: %d", client.Username, client.UserID, hub.getTotalClients())
+	logger.Info("%s (%s) connected - connection pool size: %d", client.Username, client.UserID, hub.getTotalClients())
 	hub.broadcastLobbyState()
 }
 
@@ -123,15 +123,15 @@ func (hub *Hub) removeClient(client *Client) {
 	// Remove user from both lobby and game sets in Redis
 	ctx := context.Background()
 	if err := hub.redis.SRem(ctx, RedisKeyLobbyUsers, client.UserID).Err(); err != nil {
-		log.Printf("Failed to remove user from lobby in Redis: %v", err)
+		logger.Error("Failed to remove user from lobby in Redis: %v", err)
 	}
 	// Remove username mapping
 	if err := hub.redis.HDel(ctx, "lobby:usernames", client.UserID).Err(); err != nil {
-		log.Printf("Failed to remove username from Redis: %v", err)
+		logger.Error("Failed to remove username from Redis: %v", err)
 	}
 	// Also remove from game users set
 	if err := hub.redis.SRem(ctx, RedisKeyGameUsers, client.UserID).Err(); err != nil {
-		log.Printf("Failed to remove user from game in Redis: %v", err)
+		logger.Error("Failed to remove user from game in Redis: %v", err)
 	}
 
 	hub.broadcastLobbyState()
@@ -217,20 +217,20 @@ func (hub *Hub) broadcastLobbyState() {
 	// Get lobby and game users from Redis
 	lobbyUserIds, err := hub.redis.SMembers(ctx, RedisKeyLobbyUsers).Result()
 	if err != nil {
-		log.Printf("Failed to get lobby users from Redis: %v", err)
+		logger.Error("Failed to get lobby users from Redis: %v", err)
 		return
 	}
 
 	gameUserIds, err := hub.redis.SMembers(ctx, RedisKeyGameUsers).Result()
 	if err != nil {
-		log.Printf("Failed to get game users from Redis: %v", err)
+		logger.Error("Failed to get game users from Redis: %v", err)
 		return
 	}
 
 	// Get username mappings from Redis
 	usernames, err := hub.redis.HGetAll(ctx, "lobby:usernames").Result()
 	if err != nil {
-		log.Printf("Failed to get usernames from Redis: %v", err)
+		logger.Error("Failed to get usernames from Redis: %v", err)
 		usernames = make(map[string]string)
 	}
 
