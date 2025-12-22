@@ -41,13 +41,6 @@ func New(cfg *config.Config) (*Hub, error) {
 		return nil, err
 	}
 
-	gameMap, err := LoadMapFromFile(cfg.MapPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load game map: %w", err)
-	}
-	log.Printf("Loaded game map: %dx%d tiles (%dx%d pixels)",
-		gameMap.Width, gameMap.Height, int(gameMap.PixelWidth), int(gameMap.PixelHeight))
-
 	hub := &Hub{
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
@@ -56,17 +49,24 @@ func New(cfg *config.Config) (*Hub, error) {
 
 		redis:         pubsub.conn,
 		pubsub:        pubsub,
-		pubsubEnabled: !cfg.DisablePubSub,
+		pubsubEnabled: !cfg.IsAPIServer,
 	}
 
 	ctx := context.Background()
 	hub.redis.Del(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers, "lobby:usernames")
 
-	// Initialize game state manager with 30ms tick rate (33 updates/sec)
-	hub.gameStateManager = NewGameStateManager(hub, gameMap, 30*time.Millisecond)
-	hub.gameStateManager.Start()
+	if !cfg.IsAPIServer {
+		gameMap, err := LoadMapFromFile(cfg.MapPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load game map: %w", err)
+		}
+		log.Printf("Loaded game map: %dx%d tiles (%dx%d pixels)",
+			gameMap.Width, gameMap.Height, int(gameMap.PixelWidth), int(gameMap.PixelHeight))
 
-	// hub.users = userStore.GetAllUsers()
+		// Initialize game state manager with 30ms tick rate (33 updates/sec)
+		hub.gameStateManager = NewGameStateManager(hub, gameMap, 30*time.Millisecond)
+		hub.gameStateManager.Start()
+	}
 
 	return hub, nil
 }

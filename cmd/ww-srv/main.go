@@ -22,6 +22,7 @@ func main() {
 	cfg := &config.Config{}
 	cfg.Load(os.Args[1:])
 	cfg.RedisOpts = config.NewRedisOpts(cfg.RedisURL)
+	cfg.IsAPIServer = true
 
 	redisClient := redis.NewClient(cfg.RedisOpts)
 

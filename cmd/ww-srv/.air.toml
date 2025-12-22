@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["--DATABASE_URL=${DATABASE_URL}", "--REDIS_URL=${REDIS_URL}", "--DISABLE_PUBSUB=true"]
+  args_bin = ["--DATABASE_URL=${DATABASE_URL}", "--REDIS_URL=${REDIS_URL}"]
   bin = "./tmp/ww-srv"
   cmd = "go build -o ./tmp/ww-srv ./cmd/ww-srv"
   delay = 100

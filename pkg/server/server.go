@@ -146,7 +146,7 @@ func (s *Server) Start() {
 	cleanup := make(chan os.Signal, 1)
 	signal.Notify(cleanup, syscall.SIGINT, syscall.SIGTERM)
 
-	if s.cfg.DisablePubSub == false {
+	if !s.cfg.IsAPIServer {
 		hubCtx, hubCancel = context.WithCancel(context.Background())
 		go s.hub.Run(hubCtx)
 		s.serverName = "WizardWarriors game server"
@@ -184,13 +184,8 @@ func (s *Server) Start() {
 	blueColor := "\033[94m"
 	boldText := "\033[1m"
 
-	pubsubStatus := "enabled"
-	if s.cfg.DisablePubSub {
-		pubsubStatus = "disabled"
-	}
-
-	log.Printf("[ID: %s%s%s%s] %s listening on %s (pubsub: %s)\n",
-		boldText, blueColor, id, resetColor, s.serverName, s.server.Addr, pubsubStatus)
+	log.Printf("[ID: %s%s%s%s] %s listening on %s\n",
+		boldText, blueColor, id, resetColor, s.serverName, s.server.Addr)
 
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("HTTP server ListenAndServe: %v [ID: %s%s%s%s]\n",

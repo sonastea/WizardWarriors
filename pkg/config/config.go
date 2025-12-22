@@ -21,7 +21,7 @@ type Config struct {
 	RedisURL       string
 	RedisOpts      *redis.Options
 	MapPath        string
-	DisablePubSub  bool
+	IsAPIServer    bool
 }
 
 // Load parses the command-line arguments into the Config struct
@@ -34,7 +34,7 @@ func (c *Config) Load(args []string) error {
 	fs.StringVar(&c.RedisURL, "REDIS_URL", "redis://localhost:6379/0", "redis url")
 	fs.IntVar(&c.SessionMaxAge, "SESSION_MAX_AGE", 86400, "session cookie max age in seconds (default: 86400 = 24 hours)")
 	fs.StringVar(&c.MapPath, "MAP_PATH", "pkg/hub/assets/multiplayer_map.json", "path to the game map JSON file")
-	fs.BoolVar(&c.DisablePubSub, "DISABLE_PUBSUB", false, "disable Redis pub/sub (for api servers)")
+	fs.BoolVar(&c.IsAPIServer, "API_SERVER", false, "run as API server (disables game-specific features like pub/sub and game state)")
 
 	var allowedOrigins string
 	fs.StringVar(&allowedOrigins, "ALLOWED_ORIGINS", "http://ww.dev.localhost,http://localhost:3000", "comma-separated list of allowed origins for CORS")
