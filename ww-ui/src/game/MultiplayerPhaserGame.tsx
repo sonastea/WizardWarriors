@@ -14,7 +14,7 @@ import { useSocket } from "@contexts/Socket";
 import usePhaserGame from "@hooks/usePhaserGame";
 import { useAtomValue } from "jotai";
 import { Types } from "phaser";
-import { RefObject, useEffect, useRef, useState } from "react";
+import { RefObject, useCallback, useEffect, useRef, useState } from "react";
 import LoginModal from "src/components/LoginModal";
 import { gameStatsAtom } from "src/state";
 import { EventBus } from "./EventBus";
@@ -105,6 +105,7 @@ const MultiplayerPhaserGame = ({
   const [lobbyUsers, setLobbyUsers] = useState<LobbyUserDisplay[]>([]);
   const [gameUsers, setGameUsers] = useState<LobbyUserDisplay[]>([]);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isChatFocused, setIsChatFocused] = useState(false);
 
   // Get player ID - use guestId for guests, otherwise use gameStats.user_id
   const getPlayerId = () => {
@@ -113,6 +114,40 @@ const MultiplayerPhaserGame = ({
     }
     return gameStats.user_id.toString();
   };
+
+  const focusChat = useCallback(() => {
+    chatInputRef.current?.focus();
+    setIsChatFocused(true);
+  }, []);
+
+  // Return focus to the game (blur chat input)
+  const focusGame = useCallback(() => {
+    chatInputRef.current?.blur();
+    setIsChatFocused(false);
+    // Focus the game canvas to ensure keyboard inputs register
+    const canvas = gameRef.current?.querySelector("canvas");
+    canvas?.focus();
+  }, []);
+
+  // Global keyboard handler for Enter key to toggle chat
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (showLoginModal) return;
+
+      if (e.key === "Enter" && !isChatFocused) {
+        e.preventDefault();
+        focusChat();
+      } else if (e.key === "Escape" && isChatFocused) {
+        e.preventDefault();
+        focusGame();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [isChatFocused, showLoginModal, focusChat, focusGame]);
 
   useEffect(() => {
     if (token && !isConnected && !isConnecting) {
@@ -380,8 +415,7 @@ const MultiplayerPhaserGame = ({
 
     setChatInput("");
 
-    // Blur the input to return focus to the game
-    chatInputRef.current?.blur();
+    focusGame();
   };
 
   return (
@@ -397,6 +431,7 @@ const MultiplayerPhaserGame = ({
       <div
         id="game-content"
         ref={gameRef}
+        onClick={focusGame}
         style={{ width: "100%", height: "100%" }}
       />
 
@@ -610,15 +645,23 @@ const MultiplayerPhaserGame = ({
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => e.stopPropagation()}
+            onFocus={() => setIsChatFocused(true)}
+            onBlur={() => setIsChatFocused(false)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") {
+                e.preventDefault();
+                focusGame();
+              }
+            }}
             onKeyUp={(e) => e.stopPropagation()}
-            placeholder="Type a message..."
+            placeholder="Press Enter to chat..."
             disabled={!isConnected}
             style={{
               flex: 1,
               padding: "8px",
               backgroundColor: "rgba(0, 0, 0, 0.8)",
-              border: "1px solid #444",
+              border: isChatFocused ? "1px solid #4a9eff" : "1px solid #444",
               borderRadius: "4px 0 0 4px",
               color: "white",
               outline: "none",
