@@ -15,8 +15,7 @@
     "next": "^16.1.0",
     "phaser": "^3.90.0",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "ts-protoc-gen": "0.15.1-pre.a71b34e"
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
