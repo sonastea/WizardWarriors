@@ -127,18 +127,14 @@ export default class MultiplayerGameScene extends Scene {
     this.localPlayer.setVisible(false);
     this.localPlayer.setDepth(10); // Ensure player renders above terrain
 
-    // Camera follows player
     this.cameras.main.startFollow(this.localPlayer, true, 0.5, 0.5);
 
-    // Set up keyboard input
     this.cursors = this.input.keyboard?.createCursorKeys() || null;
 
-    // Subscribe to multiplayer events
     EventBus.on("multiplayer-game-state", this.handleGameState, this);
     EventBus.on("multiplayer-player-joined", this.handlePlayerJoined, this);
     EventBus.on("multiplayer-player-left", this.handlePlayerLeft, this);
 
-    // Tell server we want to join
     EventBus.emit("send-player-join");
 
     // Create minimap
@@ -147,6 +143,7 @@ export default class MultiplayerGameScene extends Scene {
       worldHeight: this.mapHeight,
       width: 150,
       height: Math.floor(150 * (this.mapHeight / this.mapWidth)), // Maintain aspect ratio
+      viewportScale: 0.5,
     });
 
     // Render collision and elevation layers on minimap

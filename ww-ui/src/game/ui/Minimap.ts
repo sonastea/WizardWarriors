@@ -30,6 +30,8 @@ interface MinimapConfig {
   viewportColor?: number;
   /** Viewport indicator alpha */
   viewportAlpha?: number;
+  /** Viewport indicator scale (0-1, smaller = smaller rectangle) */
+  viewportScale?: number;
   /** World width in pixels */
   worldWidth: number;
   /** World height in pixels */
@@ -47,9 +49,10 @@ const DEFAULT_CONFIG: Required<
   borderColor: 0xffffff,
   borderWidth: 2,
   playerColor: 0x32cd32,
-  playerSize: 6,
+  playerSize: 3,
   viewportColor: 0xffffff,
   viewportAlpha: 0.3,
+  viewportScale: 0.5,
 };
 
 export class Minimap {
@@ -61,6 +64,8 @@ export class Minimap {
   private terrainGraphics: GameObjects.Graphics;
   private playerIndicator: GameObjects.Arc;
   private viewportIndicator: GameObjects.Rectangle;
+  private viewportMaskShape: GameObjects.Graphics;
+  private viewportMask: Phaser.Display.Masks.GeometryMask;
   private otherPlayersIndicators: Map<string, GameObjects.Arc> = new Map();
 
   // Scale factors to convert world coordinates to minimap coordinates
@@ -80,6 +85,10 @@ export class Minimap {
     this.border = this.createBorder();
     this.viewportIndicator = this.createViewportIndicator();
     this.playerIndicator = this.createPlayerIndicator();
+
+    const { maskShape, mask } = this.createViewportMask();
+    this.viewportMaskShape = maskShape;
+    this.viewportMask = mask;
 
     // Add elements to container in correct order (background first, player on top)
     this.container.add([
@@ -154,11 +163,37 @@ export class Minimap {
     return viewport;
   }
 
+  private createViewportMask(): {
+    maskShape: GameObjects.Graphics;
+    mask: Phaser.Display.Masks.GeometryMask;
+  } {
+    const maskShape = this.scene.add.graphics();
+    maskShape.setScrollFactor(0);
+
+    const mask = maskShape.createGeometryMask();
+    this.viewportIndicator.setMask(mask);
+
+    return { maskShape, mask };
+  }
+
   private updatePosition(): void {
     const { width } = this.scene.scale.gameSize;
-    this.container.setPosition(
-      width - this.config.width - this.config.margin,
-      this.config.margin
+    const x = width - this.config.width - this.config.margin;
+    const y = this.config.margin;
+
+    this.container.setPosition(x, y);
+
+    this.updateMaskPosition(x, y);
+  }
+
+  private updateMaskPosition(x: number, y: number): void {
+    this.viewportMaskShape.clear();
+    this.viewportMaskShape.fillStyle(0xffffff);
+    this.viewportMaskShape.fillRect(
+      x,
+      y,
+      this.config.width,
+      this.config.height
     );
   }
 
@@ -187,11 +222,18 @@ export class Minimap {
    * Update the camera viewport indicator on the minimap
    */
   updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
-    const minimapPos = this.worldToMinimap(camera.scrollX, camera.scrollY);
-    const viewportWidth = camera.width * this.scaleX;
-    const viewportHeight = camera.height * this.scaleY;
+    const viewportWidth =
+      camera.width * this.scaleX * this.config.viewportScale;
+    const viewportHeight =
+      camera.height * this.scaleY * this.config.viewportScale;
 
-    this.viewportIndicator.setPosition(minimapPos.x, minimapPos.y);
+    const playerX = this.playerIndicator.x;
+    const playerY = this.playerIndicator.y;
+
+    this.viewportIndicator.setPosition(
+      playerX - viewportWidth / 2,
+      playerY - viewportHeight / 2
+    );
     this.viewportIndicator.setSize(viewportWidth, viewportHeight);
   }
 
@@ -360,6 +402,8 @@ export class Minimap {
     this.scene.scale.off("resize", this.updatePosition, this);
     this.otherPlayersIndicators.forEach((indicator) => indicator.destroy());
     this.otherPlayersIndicators.clear();
+    this.viewportMask.destroy();
+    this.viewportMaskShape.destroy();
     this.container.destroy();
   }
 }
