@@ -14,7 +14,7 @@ import Enemy from "../entity/enemy";
 import Slime from "../entity/slime";
 import { Game as GameScene } from "../scenes/Game";
 import Fireball from "../entity/fireball";
-import { Minimap } from "../ui/Minimap";
+import { Minimap, EnemyData } from "../ui/Minimap";
 
 export class Game extends Scene {
   player: Player | null;
@@ -421,9 +421,19 @@ export class Game extends Scene {
   update(time: number, delta: number) {
     this.player?.update(time, delta);
 
-    // Update minimap with player position
     if (this.minimap && this.player) {
       this.minimap.update(this.player.x, this.player.y);
+
+      const enemyData = new Map<string, EnemyData>();
+      for (const enemy of this.getEnemies) {
+        if (enemy.active) {
+          enemyData.set(enemy.id, {
+            worldX: enemy.x,
+            worldY: enemy.y,
+          });
+        }
+      }
+      this.minimap.updateEnemies(enemyData);
     }
   }
 }

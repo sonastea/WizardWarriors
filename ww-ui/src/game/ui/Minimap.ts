@@ -36,6 +36,14 @@ interface MinimapConfig {
   worldWidth: number;
   /** World height in pixels */
   worldHeight: number;
+  /** Distance threshold for enemy visibility on minimap (in world pixels) */
+  enemyVisibilityThreshold?: number;
+}
+
+interface EnemyData {
+  worldX: number;
+  worldY: number;
+  color?: number;
 }
 
 const DEFAULT_CONFIG: Required<
@@ -53,6 +61,7 @@ const DEFAULT_CONFIG: Required<
   viewportColor: 0xffffff,
   viewportAlpha: 0.3,
   viewportScale: 0.5,
+  enemyVisibilityThreshold: 0,
 };
 
 export class Minimap {
@@ -67,6 +76,16 @@ export class Minimap {
   private viewportMaskShape: GameObjects.Graphics;
   private viewportMask: Phaser.Display.Masks.GeometryMask;
   private otherPlayersIndicators: Map<string, GameObjects.Arc> = new Map();
+  private enemyIndicators: Map<string, GameObjects.Arc> = new Map();
+
+  private playerWorldX: number = 0;
+  private playerWorldY: number = 0;
+
+  // Viewport bounds in minimap coordinates (for visibility checks)
+  private viewportLeft: number = 0;
+  private viewportRight: number = 0;
+  private viewportTop: number = 0;
+  private viewportBottom: number = 0;
 
   // Scale factors to convert world coordinates to minimap coordinates
   private scaleX: number;
@@ -214,6 +233,8 @@ export class Minimap {
    * Update the player position on the minimap
    */
   updatePlayerPosition(worldX: number, worldY: number): void {
+    this.playerWorldX = worldX;
+    this.playerWorldY = worldY;
     const minimapPos = this.worldToMinimap(worldX, worldY);
     this.playerIndicator.setPosition(minimapPos.x, minimapPos.y);
   }
@@ -230,11 +251,17 @@ export class Minimap {
     const playerX = this.playerIndicator.x;
     const playerY = this.playerIndicator.y;
 
-    this.viewportIndicator.setPosition(
-      playerX - viewportWidth / 2,
-      playerY - viewportHeight / 2
-    );
+    const viewportX = playerX - viewportWidth / 2;
+    const viewportY = playerY - viewportHeight / 2;
+
+    this.viewportIndicator.setPosition(viewportX, viewportY);
     this.viewportIndicator.setSize(viewportWidth, viewportHeight);
+
+    // Track viewport bounds in minimap coordinates for visibility checks
+    this.viewportLeft = viewportX;
+    this.viewportTop = viewportY;
+    this.viewportRight = viewportX + viewportWidth;
+    this.viewportBottom = viewportY + viewportHeight;
   }
 
   /**
@@ -271,6 +298,123 @@ export class Minimap {
     if (indicator) {
       indicator.destroy();
       this.otherPlayersIndicators.delete(playerId);
+    }
+  }
+
+  /**
+   * Check if a minimap position is within visibility threshold of the viewport mask
+   * Returns true if the position is inside the viewport rectangle or within threshold distance of its edges
+   */
+  private isWithinVisibilityThreshold(
+    minimapX: number,
+    minimapY: number
+  ): boolean {
+    const threshold = this.config.enemyVisibilityThreshold;
+
+    // Expand viewport bounds by threshold (in minimap coordinates)
+    const left = this.viewportLeft - threshold;
+    const right = this.viewportRight + threshold;
+    const top = this.viewportTop - threshold;
+    const bottom = this.viewportBottom + threshold;
+
+    return (
+      minimapX >= left &&
+      minimapX <= right &&
+      minimapY >= top &&
+      minimapY <= bottom
+    );
+  }
+
+  /**
+   * Update enemies on the minimap, only showing those within visibility threshold
+   * @param enemies - Map of enemy IDs to their world positions
+   */
+  updateEnemies(enemies: Map<string, EnemyData>): void {
+    // Track which enemies are still present
+    const currentEnemyIds = new Set<string>();
+
+    enemies.forEach((data, enemyId) => {
+      currentEnemyIds.add(enemyId);
+
+      const minimapPos = this.worldToMinimap(data.worldX, data.worldY);
+      const isVisible = this.isWithinVisibilityThreshold(
+        minimapPos.x,
+        minimapPos.y
+      );
+      let indicator = this.enemyIndicators.get(enemyId);
+
+      if (isVisible) {
+        if (!indicator) {
+          indicator = this.scene.add.circle(
+            0,
+            0,
+            this.config.playerSize - 1,
+            data.color ?? 0xff4444
+          );
+          this.enemyIndicators.set(enemyId, indicator);
+          this.container.add(indicator);
+        }
+
+        indicator.setPosition(minimapPos.x, minimapPos.y);
+        indicator.setVisible(true);
+      } else if (indicator) {
+        indicator.setVisible(false);
+      }
+    });
+
+    this.enemyIndicators.forEach((indicator, enemyId) => {
+      if (!currentEnemyIds.has(enemyId)) {
+        indicator.destroy();
+        this.enemyIndicators.delete(enemyId);
+      }
+    });
+  }
+
+  /**
+   * Update another player's position on the minimap with visibility check
+   * Only shows the player if they are within the visibility threshold
+   */
+  updateOtherPlayerWithVisibility(
+    playerId: string,
+    worldX: number,
+    worldY: number,
+    color: number = 0xff4444
+  ): void {
+    // Convert to minimap coordinates first
+    const minimapPos = this.worldToMinimap(worldX, worldY);
+    const isVisible = this.isWithinVisibilityThreshold(
+      minimapPos.x,
+      minimapPos.y
+    );
+    let indicator = this.otherPlayersIndicators.get(playerId);
+
+    if (isVisible) {
+      if (!indicator) {
+        indicator = this.scene.add.circle(
+          0,
+          0,
+          this.config.playerSize - 1,
+          color
+        );
+        this.otherPlayersIndicators.set(playerId, indicator);
+        this.container.add(indicator);
+      }
+
+      indicator.setPosition(minimapPos.x, minimapPos.y);
+      indicator.setVisible(true);
+    } else if (indicator) {
+      indicator.setVisible(false);
+    }
+  }
+
+  /**
+   * Remove an enemy from the minimap
+   */
+  removeEnemy(enemyId: string): void {
+    const indicator = this.enemyIndicators.get(enemyId);
+    if (indicator) {
+      indicator.destroy();
+      this.enemyIndicators.delete(enemyId);
     }
   }
 
@@ -402,8 +546,12 @@ export class Minimap {
     this.scene.scale.off("resize", this.updatePosition, this);
     this.otherPlayersIndicators.forEach((indicator) => indicator.destroy());
     this.otherPlayersIndicators.clear();
+    this.enemyIndicators.forEach((indicator) => indicator.destroy());
+    this.enemyIndicators.clear();
     this.viewportMask.destroy();
     this.viewportMaskShape.destroy();
     this.container.destroy();
   }
 }
+
+export type { EnemyData };

@@ -418,7 +418,11 @@ export default class MultiplayerGameScene extends Scene {
     playerData.sprite.setVisible(true);
     this.players.set(data.playerId, playerData);
 
-    this.minimap?.updateOtherPlayer(data.playerId, data.x, data.y);
+    this.minimap?.updateOtherPlayerWithVisibility(
+      data.playerId,
+      data.x,
+      data.y
+    );
   }
 
   handlePlayerLeft(data: { playerId: string }) {
@@ -465,7 +469,7 @@ export default class MultiplayerGameScene extends Scene {
         );
       }
 
-      this.minimap?.updateOtherPlayer(
+      this.minimap?.updateOtherPlayerWithVisibility(
         playerId,
         playerData.sprite.x,
         playerData.sprite.y
