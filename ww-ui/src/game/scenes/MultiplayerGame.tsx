@@ -5,19 +5,14 @@ import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
 import type { GameState } from "@common/gen/multiplayer/v1/messages_pb";
 
-const PLAYER_RADIUS = 16;
+const PLAYER_SIZE = 16;
 const PLAYER_SPEED = 200;
-const SLOWDOWN_SPEED = 80; // Speed when in slowdown zones
+const SLOWDOWN_SPEED = 80;
 
-// Collision tile IDs - must match server (maploader.go)
 const COLLISION_TILES = {
-  // Rocks and obstacles from collisions layer
   obstacles: [55, 56, 57, 58, 59, 60, 61, 62, 63],
-  // Buildings
   buildings: [148, 149, 150, 165, 166, 167, 182, 183, 184],
-  // Elevation tiles that block movement
   elevation: [93, 94, 95, 111, 112, 113, 128, 129, 130],
-  // Slowdown tiles (quicksand, mud, etc.)
   slowdown: [168, 169, 170, 185, 186, 187, 202, 203, 204],
 };
 
@@ -28,9 +23,17 @@ interface InputState {
   moveRight: boolean;
 }
 
+interface MultiplayerPlayerData {
+  sprite: GameObjects.Sprite;
+  indicator: GameObjects.Graphics | null;
+  lastDirection: string;
+  currentAnimationKey: string;
+  isEnemy: boolean;
+}
+
 export default class MultiplayerGameScene extends Scene {
-  private players: Map<string, GameObjects.Arc> = new Map();
-  private localPlayer: GameObjects.Arc | null = null;
+  private players: Map<string, MultiplayerPlayerData> = new Map();
+  private localPlayer: MultiplayerPlayerData | null = null;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private localPlayerId: string | null = null;
   private minimap: Minimap | null = null;
@@ -58,6 +61,76 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.on("set-local-player-id", this.handleSetLocalPlayerId, this);
   }
 
+  private createPlayerSprite(
+    x: number,
+    y: number,
+    isEnemy: boolean
+  ): MultiplayerPlayerData {
+    const sprite = this.add.sprite(x, y, "multiplayer-sheet");
+    sprite.setScale(2);
+    sprite.setDepth(10);
+    sprite.setVisible(false);
+
+    let indicator: GameObjects.Graphics | null = null;
+    if (isEnemy) {
+      indicator = this.add.graphics();
+      indicator.setDepth(11);
+      this.drawEnemyIndicator(indicator, sprite.x, sprite.y);
+    }
+
+    sprite.play("multiplayer-idle", true);
+
+    return {
+      sprite,
+      indicator,
+      lastDirection: "down",
+      currentAnimationKey: "multiplayer-idle",
+      isEnemy,
+    };
+  }
+
+  private drawEnemyIndicator(
+    graphics: GameObjects.Graphics,
+    x: number,
+    y: number
+  ): void {
+    graphics.clear();
+
+    const triangleSize = 3;
+    const offsetY = -24;
+
+    graphics.fillStyle(0xff4444, 0.9);
+    graphics.beginPath();
+    graphics.moveTo(x, y + offsetY + triangleSize); // Bottom point
+    graphics.lineTo(x - triangleSize, y + offsetY - triangleSize); // Top left
+    graphics.lineTo(x + triangleSize, y + offsetY - triangleSize); // Top right
+    graphics.closePath();
+    graphics.fillPath();
+  }
+
+  private updatePlayerAnimation(
+    playerData: MultiplayerPlayerData,
+    moving: boolean,
+    direction: string
+  ): void {
+    if (moving) {
+      playerData.lastDirection = direction;
+      const animKey = `multiplayer-${direction}`;
+      if (
+        playerData.currentAnimationKey !== animKey &&
+        this.anims.exists(animKey)
+      ) {
+        playerData.sprite.play(animKey, true);
+        playerData.currentAnimationKey = animKey;
+      }
+    } else {
+      if (playerData.currentAnimationKey !== "multiplayer-idle") {
+        playerData.sprite.play("multiplayer-idle", true);
+        playerData.currentAnimationKey = "multiplayer-idle";
+      }
+    }
+  }
+
   create() {
     const map = this.make.tilemap({ key: "map" });
     const tileset = map.addTilesetImage("DesertTilemap", "tiles");
@@ -66,17 +139,14 @@ export default class MultiplayerGameScene extends Scene {
       return;
     }
 
-    // Get map dimensions
     this.mapWidth = map.widthInPixels;
     this.mapHeight = map.heightInPixels;
 
-    // Create all layers
     const groundLayer = map.createLayer("ground", tileset, 0, 0);
     this.elevationLayer = map.createLayer("elevation", tileset, 0, 0);
     this.collisionLayer = map.createLayer("collisions", tileset, 0, 0);
     this.terrainLayer = map.createLayer("terrain", tileset, 0, 0);
 
-    // Set up collision detection on collision layer
     if (this.collisionLayer) {
       this.collisionLayer.setCollision([
         ...COLLISION_TILES.obstacles,
@@ -84,12 +154,10 @@ export default class MultiplayerGameScene extends Scene {
       ]);
     }
 
-    // Set up collision detection on elevation layer
     if (this.elevationLayer) {
       this.elevationLayer.setCollision(COLLISION_TILES.elevation);
     }
 
-    // Combine static layers into render texture for performance
     if (groundLayer && this.elevationLayer) {
       const staticLayersTexture = this.add.renderTexture(
         0,
@@ -113,21 +181,16 @@ export default class MultiplayerGameScene extends Scene {
       this.terrainLayer.setVisible(true);
     }
 
-    // Set camera bounds to map size
     this.cameras.main.setBounds(0, 0, this.mapWidth, this.mapHeight);
 
-    // Create local player (initially invisible until server confirms position)
-    this.localPlayer = this.add.circle(
+    this.localPlayer = this.createPlayerSprite(
       this.mapWidth / 2,
       this.mapHeight / 2,
-      PLAYER_RADIUS,
-      0x4a9eff
+      false
     );
-    this.localPlayer.setData("playerId", "local");
-    this.localPlayer.setVisible(false);
-    this.localPlayer.setDepth(10); // Ensure player renders above terrain
+    this.localPlayer.sprite.setData("playerId", "local");
 
-    this.cameras.main.startFollow(this.localPlayer, true, 0.5, 0.5);
+    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.5, 0.5);
 
     this.cursors = this.input.keyboard?.createCursorKeys() || null;
 
@@ -137,16 +200,14 @@ export default class MultiplayerGameScene extends Scene {
 
     EventBus.emit("send-player-join");
 
-    // Create minimap
     this.minimap = new Minimap(this, {
       worldWidth: this.mapWidth,
       worldHeight: this.mapHeight,
       width: 150,
-      height: Math.floor(150 * (this.mapHeight / this.mapWidth)), // Maintain aspect ratio
+      height: Math.floor(150 * (this.mapHeight / this.mapWidth)),
       viewportScale: 0.5,
     });
 
-    // Render collision and elevation layers on minimap
     if (this.collisionLayer && this.elevationLayer) {
       this.minimap.renderLayers(this.collisionLayer, this.elevationLayer);
     }
@@ -164,52 +225,59 @@ export default class MultiplayerGameScene extends Scene {
       moveRight: this.cursors.right?.isDown || false,
     };
 
-    // Client-side prediction for immediate feedback (server is authoritative)
-    if (this.localPlayer.visible) {
-      // Check if player is in a slowdown zone
+    if (this.localPlayer.sprite.visible) {
       const inSlowdown = this.isInSlowdownZone(
-        this.localPlayer.x,
-        this.localPlayer.y
+        this.localPlayer.sprite.x,
+        this.localPlayer.sprite.y
       );
       const currentSpeed = inSlowdown ? SLOWDOWN_SPEED : PLAYER_SPEED;
 
       let velocityX = 0;
       let velocityY = 0;
+      let moving = false;
+      let direction = this.localPlayer.lastDirection;
 
-      if (currentInput.moveLeft) velocityX = -currentSpeed;
-      if (currentInput.moveRight) velocityX = currentSpeed;
-      if (currentInput.moveUp) velocityY = -currentSpeed;
-      if (currentInput.moveDown) velocityY = currentSpeed;
+      if (currentInput.moveLeft) {
+        velocityX = -currentSpeed;
+        moving = true;
+        direction = "left";
+      }
+      if (currentInput.moveRight) {
+        velocityX = currentSpeed;
+        moving = true;
+        direction = "right";
+      }
+      if (currentInput.moveUp) {
+        velocityY = -currentSpeed;
+        moving = true;
+        direction = "up";
+      }
+      if (currentInput.moveDown) {
+        velocityY = currentSpeed;
+        moving = true;
+        direction = "down";
+      }
+
+      this.updatePlayerAnimation(this.localPlayer, moving, direction);
 
       const deltaSeconds = delta / 1000;
-      let newX = this.localPlayer.x + velocityX * deltaSeconds;
-      let newY = this.localPlayer.y + velocityY * deltaSeconds;
+      let newX = this.localPlayer.sprite.x + velocityX * deltaSeconds;
+      let newY = this.localPlayer.sprite.y + velocityY * deltaSeconds;
 
-      // Clamp to map boundaries
-      newX = Phaser.Math.Clamp(
-        newX,
-        PLAYER_RADIUS,
-        this.mapWidth - PLAYER_RADIUS
-      );
-      newY = Phaser.Math.Clamp(
-        newY,
-        PLAYER_RADIUS,
-        this.mapHeight - PLAYER_RADIUS
-      );
+      newX = Phaser.Math.Clamp(newX, PLAYER_SIZE, this.mapWidth - PLAYER_SIZE);
+      newY = Phaser.Math.Clamp(newY, PLAYER_SIZE, this.mapHeight - PLAYER_SIZE);
 
-      // Check for collision using tilemap layers
-      const canMoveX = !this.isColliding(newX, this.localPlayer.y);
-      const canMoveY = !this.isColliding(this.localPlayer.x, newY);
+      const canMoveX = !this.isColliding(newX, this.localPlayer.sprite.y);
+      const canMoveY = !this.isColliding(this.localPlayer.sprite.x, newY);
 
       if (canMoveX) {
-        this.localPlayer.x = newX;
+        this.localPlayer.sprite.x = newX;
       }
       if (canMoveY) {
-        this.localPlayer.y = newY;
+        this.localPlayer.sprite.y = newY;
       }
     }
 
-    // Send input changes to server (event-based, only when input changes)
     if (currentInput.moveUp !== this.lastInputState.moveUp) {
       EventBus.emit("send-input-change", {
         input: "moveUp",
@@ -239,17 +307,12 @@ export default class MultiplayerGameScene extends Scene {
       this.lastInputState.moveRight = currentInput.moveRight;
     }
 
-    // Update minimap
-    if (this.minimap && this.localPlayer.visible) {
-      this.minimap.update(this.localPlayer.x, this.localPlayer.y);
+    if (this.minimap && this.localPlayer.sprite.visible) {
+      this.minimap.update(this.localPlayer.sprite.x, this.localPlayer.sprite.y);
     }
   }
 
-  /**
-   * Check if a position collides with any collision tiles
-   */
   private isColliding(x: number, y: number): boolean {
-    // Check collision layer
     if (this.collisionLayer) {
       const tile = this.collisionLayer.getTileAtWorldXY(x, y);
       if (tile && tile.collides) {
@@ -257,7 +320,6 @@ export default class MultiplayerGameScene extends Scene {
       }
     }
 
-    // Check elevation layer
     if (this.elevationLayer) {
       const tile = this.elevationLayer.getTileAtWorldXY(x, y);
       if (tile && tile.collides) {
@@ -268,17 +330,11 @@ export default class MultiplayerGameScene extends Scene {
     return false;
   }
 
-  /**
-   * Check if a position is in a slowdown zone (quicksand, mud, etc.)
-   * Returns true if the tile at position is a slowdown tile
-   */
   private isInSlowdownZone(x: number, y: number): boolean {
-    // No slowdown tiles defined yet - will be used when you add them to the tilemap
     if (COLLISION_TILES.slowdown.length === 0) {
       return false;
     }
 
-    // Check terrain layer for slowdown tiles
     if (this.terrainLayer) {
       const tile = this.terrainLayer.getTileAtWorldXY(x, y);
       if (tile && COLLISION_TILES.slowdown.includes(tile.index)) {
@@ -286,7 +342,6 @@ export default class MultiplayerGameScene extends Scene {
       }
     }
 
-    // Also check collision layer for slowdown tiles
     if (this.collisionLayer) {
       const tile = this.collisionLayer.getTileAtWorldXY(x, y);
       if (tile && COLLISION_TILES.slowdown.includes(tile.index)) {
@@ -313,43 +368,37 @@ export default class MultiplayerGameScene extends Scene {
 
       if (playerId === this.localPlayerId) {
         if (this.localPlayer) {
-          if (!this.localPlayer.visible) {
-            this.localPlayer.setVisible(true);
+          if (!this.localPlayer.sprite.visible) {
+            this.localPlayer.sprite.setVisible(true);
           }
 
-          // Correct client position towards server truth
           const distance = Phaser.Math.Distance.Between(
-            this.localPlayer.x,
-            this.localPlayer.y,
+            this.localPlayer.sprite.x,
+            this.localPlayer.sprite.y,
             position.x,
             position.y
           );
 
           if (distance > 100) {
-            // Snap if very far (teleport, initial spawn, or major desync)
-            this.localPlayer.x = position.x;
-            this.localPlayer.y = position.y;
+            this.localPlayer.sprite.x = position.x;
+            this.localPlayer.sprite.y = position.y;
           } else if (distance > 2) {
-            // Blend towards server position smoothly
-            this.localPlayer.x = Phaser.Math.Linear(
-              this.localPlayer.x,
+            this.localPlayer.sprite.x = Phaser.Math.Linear(
+              this.localPlayer.sprite.x,
               position.x,
               0.3
             );
-            this.localPlayer.y = Phaser.Math.Linear(
-              this.localPlayer.y,
+            this.localPlayer.sprite.y = Phaser.Math.Linear(
+              this.localPlayer.sprite.y,
               position.y,
               0.3
             );
           }
-          // If within 2 pixels, trust client prediction (feels responsive)
         }
       } else {
-        // Remote player - update or create
         if (!this.players.has(playerId)) {
           this.handlePlayerJoined({
             playerId: playerId,
-            username: playerId,
             x: position.x,
             y: position.y,
           });
@@ -360,65 +409,67 @@ export default class MultiplayerGameScene extends Scene {
     }
   }
 
-  handlePlayerJoined(data: {
-    playerId: string;
-    username: string;
-    x: number;
-    y: number;
-  }) {
+  handlePlayerJoined(data: { playerId: string; x: number; y: number }) {
     if (data.playerId === this.localPlayerId) return;
     if (this.players.has(data.playerId)) return;
 
-    const player = this.add.circle(data.x, data.y, PLAYER_RADIUS, 0xff4444);
-    player.setData("playerId", data.playerId);
-    player.setDepth(10); // Ensure player renders above terrain
-    this.players.set(data.playerId, player);
+    const playerData = this.createPlayerSprite(data.x, data.y, true);
+    playerData.sprite.setData("playerId", data.playerId);
+    playerData.sprite.setVisible(true);
+    this.players.set(data.playerId, playerData);
 
-    const label = this.add
-      .text(data.x, data.y - 30, data.username, {
-        fontSize: "12px",
-        color: "#ffffff",
-        backgroundColor: "#000000",
-        padding: { x: 4, y: 2 },
-      })
-      .setOrigin(0.5)
-      .setDepth(11);
-
-    player.setData("label", label);
-
-    // Add player to minimap
     this.minimap?.updateOtherPlayer(data.playerId, data.x, data.y);
   }
 
   handlePlayerLeft(data: { playerId: string }) {
-    const player = this.players.get(data.playerId);
-    if (player) {
-      const label = player.getData("label");
-      label?.destroy();
-      player.destroy();
+    const playerData = this.players.get(data.playerId);
+    if (playerData) {
+      playerData.sprite.destroy();
+      playerData.indicator?.destroy();
       this.players.delete(data.playerId);
     }
 
-    // Remove player from minimap
     this.minimap?.removeOtherPlayer(data.playerId);
   }
 
   updateRemotePlayer(playerId: string, x: number, y: number) {
-    const player = this.players.get(playerId);
+    const playerData = this.players.get(playerId);
 
-    if (player) {
-      // Smooth interpolation for remote players
-      player.x = Phaser.Math.Linear(player.x, x, 0.3);
-      player.y = Phaser.Math.Linear(player.y, y, 0.3);
+    if (playerData) {
+      const prevX = playerData.sprite.x;
+      const prevY = playerData.sprite.y;
 
-      const label = player.getData("label");
-      if (label) {
-        label.x = player.x;
-        label.y = player.y - 30;
+      playerData.sprite.x = Phaser.Math.Linear(playerData.sprite.x, x, 0.3);
+      playerData.sprite.y = Phaser.Math.Linear(playerData.sprite.y, y, 0.3);
+
+      // Determine movement direction and update animation
+      const dx = x - prevX;
+      const dy = y - prevY;
+      const moving = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5;
+
+      let direction = playerData.lastDirection;
+      if (moving) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          direction = dx > 0 ? "right" : "left";
+        } else {
+          direction = dy > 0 ? "down" : "up";
+        }
+      }
+      this.updatePlayerAnimation(playerData, moving, direction);
+
+      if (playerData.indicator) {
+        this.drawEnemyIndicator(
+          playerData.indicator,
+          playerData.sprite.x,
+          playerData.sprite.y
+        );
       }
 
-      // Update player on minimap
-      this.minimap?.updateOtherPlayer(playerId, player.x, player.y);
+      this.minimap?.updateOtherPlayer(
+        playerId,
+        playerData.sprite.x,
+        playerData.sprite.y
+      );
     }
   }
 

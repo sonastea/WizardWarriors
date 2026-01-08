@@ -38,6 +38,7 @@ const Home: NextPage = () => {
                 alt="Spinning indicator"
                 width={64}
                 height={64}
+                loading="eager"
               />
             </div>
           }

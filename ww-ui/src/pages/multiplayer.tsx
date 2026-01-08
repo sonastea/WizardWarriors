@@ -196,6 +196,7 @@ const MultiplayerPage: NextPage = () => {
           alt="Loading..."
           width={64}
           height={64}
+          loading="eager"
         />
         <p style={{ color: "white", marginTop: "1rem" }}>
           {joinMultiplayerQuery.isFetching
@@ -215,6 +216,7 @@ const MultiplayerPage: NextPage = () => {
             alt="Loading game..."
             width={64}
             height={64}
+            loading="eager"
           />
         </div>
       }

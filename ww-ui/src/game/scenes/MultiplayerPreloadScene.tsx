@@ -1,10 +1,6 @@
 import { GameObjects, Scene } from "phaser";
 import { CONSTANTS } from "../constants";
 
-/**
- * Preload scene for multiplayer mode.
- * Loads all assets needed for the multiplayer game before transitioning to the lobby.
- */
 export default class MultiplayerPreloadScene extends Scene {
   constructor() {
     super(CONSTANTS.SCENES.MULTIPLAYER_PRELOAD);
@@ -58,9 +54,64 @@ export default class MultiplayerPreloadScene extends Scene {
       startFrame: 9,
       endFrame: 17,
     });
+
+    this.load.spritesheet(
+      "multiplayer-sheet",
+      "assets/MultiplayerSpriteSheet.png",
+      {
+        frameWidth: 16,
+        frameHeight: 16,
+      }
+    );
   }
 
   create() {
+    this.anims.create({
+      key: "multiplayer-idle",
+      frames: [{ key: "multiplayer-sheet", frame: 1 }],
+      frameRate: 8,
+    });
+
+    this.anims.create({
+      key: "multiplayer-down",
+      frames: this.anims.generateFrameNumbers("multiplayer-sheet", {
+        start: 0,
+        end: 2,
+      }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
+    this.anims.create({
+      key: "multiplayer-left",
+      frames: this.anims.generateFrameNumbers("multiplayer-sheet", {
+        start: 16,
+        end: 18,
+      }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
+    this.anims.create({
+      key: "multiplayer-right",
+      frames: this.anims.generateFrameNumbers("multiplayer-sheet", {
+        start: 32,
+        end: 34,
+      }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
+    this.anims.create({
+      key: "multiplayer-up",
+      frames: this.anims.generateFrameNumbers("multiplayer-sheet", {
+        start: 48,
+        end: 50,
+      }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
     this.scene.start(CONSTANTS.SCENES.MULTIPLAYER_LOBBY);
   }
 

@@ -14,11 +14,12 @@ import { useSocket } from "@contexts/Socket";
 import usePhaserGame from "@hooks/usePhaserGame";
 import { logger } from "@utils/logger";
 import { useAtomValue } from "jotai";
-import { Types } from "phaser";
+import Phaser, { Types } from "phaser";
 import { RefObject, useCallback, useEffect, useRef, useState } from "react";
 import LoginModal from "src/components/LoginModal";
 import { gameStatsAtom } from "src/state";
 import { EventBus } from "./EventBus";
+
 import MultiplayerGameScene from "./scenes/MultiplayerGame";
 import MultiplayerLobbyScene from "./scenes/MultiplayerLobby";
 import MultiplayerPreloadScene from "./scenes/MultiplayerPreloadScene";
