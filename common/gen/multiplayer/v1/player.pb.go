@@ -146,27 +146,21 @@ type ActionType int32
 
 const (
 	ActionType_ACTION_TYPE_UNSPECIFIED  ActionType = 0
-	ActionType_ACTION_TYPE_PRIMARY_FIRE ActionType = 1 // e.g., fireball
-	ActionType_ACTION_TYPE_ABILITY_1    ActionType = 2
-	ActionType_ACTION_TYPE_ABILITY_2    ActionType = 3
-	ActionType_ACTION_TYPE_INTERACT     ActionType = 4
+	ActionType_ACTION_TYPE_THROW_POTION ActionType = 1
+	ActionType_ACTION_TYPE_INTERACT     ActionType = 2
 )
 
 // Enum value maps for ActionType.
 var (
 	ActionType_name = map[int32]string{
 		0: "ACTION_TYPE_UNSPECIFIED",
-		1: "ACTION_TYPE_PRIMARY_FIRE",
-		2: "ACTION_TYPE_ABILITY_1",
-		3: "ACTION_TYPE_ABILITY_2",
-		4: "ACTION_TYPE_INTERACT",
+		1: "ACTION_TYPE_THROW_POTION",
+		2: "ACTION_TYPE_INTERACT",
 	}
 	ActionType_value = map[string]int32{
 		"ACTION_TYPE_UNSPECIFIED":  0,
-		"ACTION_TYPE_PRIMARY_FIRE": 1,
-		"ACTION_TYPE_ABILITY_1":    2,
-		"ACTION_TYPE_ABILITY_2":    3,
-		"ACTION_TYPE_INTERACT":     4,
+		"ACTION_TYPE_THROW_POTION": 1,
+		"ACTION_TYPE_INTERACT":     2,
 	}
 )
 
@@ -498,14 +492,12 @@ const file_multiplayer_v1_player_proto_rawDesc = "" +
 	"\x12INPUT_TYPE_MOVE_UP\x10\x01\x12\x18\n" +
 	"\x14INPUT_TYPE_MOVE_DOWN\x10\x02\x12\x18\n" +
 	"\x14INPUT_TYPE_MOVE_LEFT\x10\x03\x12\x19\n" +
-	"\x15INPUT_TYPE_MOVE_RIGHT\x10\x04*\x97\x01\n" +
+	"\x15INPUT_TYPE_MOVE_RIGHT\x10\x04*a\n" +
 	"\n" +
 	"ActionType\x12\x1b\n" +
 	"\x17ACTION_TYPE_UNSPECIFIED\x10\x00\x12\x1c\n" +
-	"\x18ACTION_TYPE_PRIMARY_FIRE\x10\x01\x12\x19\n" +
-	"\x15ACTION_TYPE_ABILITY_1\x10\x02\x12\x19\n" +
-	"\x15ACTION_TYPE_ABILITY_2\x10\x03\x12\x18\n" +
-	"\x14ACTION_TYPE_INTERACT\x10\x04B\xc6\x01\n" +
+	"\x18ACTION_TYPE_THROW_POTION\x10\x01\x12\x18\n" +
+	"\x14ACTION_TYPE_INTERACT\x10\x02B\xc6\x01\n" +
 	"\x12com.multiplayer.v1B\vPlayerProtoP\x01ZJgithub.com/sonastea/WizardWarriors/common/gen/multiplayer/v1;multiplayerv1\xa2\x02\x03MXX\xaa\x02\x0eMultiplayer.V1\xca\x02\x0eMultiplayer\\V1\xe2\x02\x1aMultiplayer\\V1\\GPBMetadata\xea\x02\x0fMultiplayer::V1b\x06proto3"
 
 var (

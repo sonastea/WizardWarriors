@@ -3,7 +3,11 @@ import { logger } from "@utils/logger";
 import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
-import type { GameState } from "@common/gen/multiplayer/v1/messages_pb";
+import type {
+  GameState,
+  ProjectileState,
+} from "@common/gen/multiplayer/v1/messages_pb";
+import { ProjectileType } from "@common/gen/multiplayer/v1/messages_pb";
 
 const PLAYER_SIZE = 16;
 const PLAYER_SPEED = 200;
@@ -29,14 +33,25 @@ interface MultiplayerPlayerData {
   lastDirection: string;
   currentAnimationKey: string;
   isEnemy: boolean;
+  isFrozen: boolean;
+  frozenParticles?: GameObjects.Particles.ParticleEmitter;
+}
+
+interface ProjectileData {
+  sprite: GameObjects.Sprite;
+  targetX: number;
+  targetY: number;
+  type: ProjectileType;
 }
 
 export default class MultiplayerGameScene extends Scene {
   private players: Map<string, MultiplayerPlayerData> = new Map();
+  private projectiles: Map<string, ProjectileData> = new Map();
   private localPlayer: MultiplayerPlayerData | null = null;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private localPlayerId: string | null = null;
   private minimap: Minimap | null = null;
+  private freezeParticleTexture: string = "freeze-particle";
 
   private collisionLayer: Tilemaps.TilemapLayer | null = null;
   private elevationLayer: Tilemaps.TilemapLayer | null = null;
@@ -86,6 +101,7 @@ export default class MultiplayerGameScene extends Scene {
       lastDirection: "down",
       currentAnimationKey: "multiplayer-idle",
       isEnemy,
+      isFrozen: false,
     };
   }
 
@@ -198,6 +214,24 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.on("multiplayer-player-joined", this.handlePlayerJoined, this);
     EventBus.on("multiplayer-player-left", this.handlePlayerLeft, this);
 
+    this.createFreezeParticleTexture();
+
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown()) {
+        const worldPoint = this.cameras.main.getWorldPoint(
+          pointer.x,
+          pointer.y
+        );
+        EventBus.emit("send-game-action", {
+          action: "throwPotion",
+          targetX: worldPoint.x,
+          targetY: worldPoint.y,
+        });
+      }
+    });
+
+    this.input.mouse?.disableContextMenu();
+
     EventBus.emit("send-player-join");
 
     this.minimap = new Minimap(this, {
@@ -218,11 +252,13 @@ export default class MultiplayerGameScene extends Scene {
   update(_time: number, delta: number) {
     if (!this.localPlayer || !this.cursors) return;
 
+    const isFrozen = this.localPlayer.isFrozen;
+
     const currentInput: InputState = {
-      moveUp: this.cursors.up?.isDown || false,
-      moveDown: this.cursors.down?.isDown || false,
-      moveLeft: this.cursors.left?.isDown || false,
-      moveRight: this.cursors.right?.isDown || false,
+      moveUp: !isFrozen && (this.cursors.up?.isDown || false),
+      moveDown: !isFrozen && (this.cursors.down?.isDown || false),
+      moveLeft: !isFrozen && (this.cursors.left?.isDown || false),
+      moveRight: !isFrozen && (this.cursors.right?.isDown || false),
     };
 
     if (this.localPlayer.sprite.visible) {
@@ -372,6 +408,8 @@ export default class MultiplayerGameScene extends Scene {
             this.localPlayer.sprite.setVisible(true);
           }
 
+          this.setPlayerFrozen(this.localPlayer, playerState.isFrozen);
+
           const distance = Phaser.Math.Distance.Between(
             this.localPlayer.sprite.x,
             this.localPlayer.sprite.y,
@@ -403,9 +441,18 @@ export default class MultiplayerGameScene extends Scene {
             y: position.y,
           });
         } else {
-          this.updateRemotePlayer(playerId, position.x, position.y);
+          this.updateRemotePlayer(
+            playerId,
+            position.x,
+            position.y,
+            playerState.isFrozen
+          );
         }
       }
+    }
+
+    if (data.projectiles) {
+      this.updateProjectiles(data.projectiles);
     }
   }
 
@@ -436,7 +483,12 @@ export default class MultiplayerGameScene extends Scene {
     this.minimap?.removeOtherPlayer(data.playerId);
   }
 
-  updateRemotePlayer(playerId: string, x: number, y: number) {
+  updateRemotePlayer(
+    playerId: string,
+    x: number,
+    y: number,
+    isFrozen: boolean = false
+  ) {
     const playerData = this.players.get(playerId);
 
     if (playerData) {
@@ -446,20 +498,23 @@ export default class MultiplayerGameScene extends Scene {
       playerData.sprite.x = Phaser.Math.Linear(playerData.sprite.x, x, 0.3);
       playerData.sprite.y = Phaser.Math.Linear(playerData.sprite.y, y, 0.3);
 
-      // Determine movement direction and update animation
-      const dx = x - prevX;
-      const dy = y - prevY;
-      const moving = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5;
+      this.setPlayerFrozen(playerData, isFrozen);
 
-      let direction = playerData.lastDirection;
-      if (moving) {
-        if (Math.abs(dx) > Math.abs(dy)) {
-          direction = dx > 0 ? "right" : "left";
-        } else {
-          direction = dy > 0 ? "down" : "up";
+      if (!isFrozen) {
+        const dx = x - prevX;
+        const dy = y - prevY;
+        const moving = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5;
+
+        let direction = playerData.lastDirection;
+        if (moving) {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            direction = dx > 0 ? "right" : "left";
+          } else {
+            direction = dy > 0 ? "down" : "up";
+          }
         }
+        this.updatePlayerAnimation(playerData, moving, direction);
       }
-      this.updatePlayerAnimation(playerData, moving, direction);
 
       if (playerData.indicator) {
         this.drawEnemyIndicator(
@@ -481,11 +536,166 @@ export default class MultiplayerGameScene extends Scene {
     this.cameras.resize(gameSize.width, gameSize.height);
   }
 
+  /**
+   * Generate placeholder particle texture for freeze effects
+   */
+  private createFreezeParticleTexture(): void {
+    // Check if texture already exists
+    if (this.textures.exists(this.freezeParticleTexture)) {
+      return;
+    }
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(4, 4, 4);
+    graphics.fillStyle(0x88ccff, 0.8);
+    graphics.fillCircle(4, 4, 2);
+    graphics.generateTexture(this.freezeParticleTexture, 8, 8);
+    graphics.destroy();
+  }
+
+  /**
+   * Set frozen state visual for a player
+   */
+  private setPlayerFrozen(
+    playerData: MultiplayerPlayerData,
+    frozen: boolean
+  ): void {
+    if (frozen === playerData.isFrozen) return;
+
+    playerData.isFrozen = frozen;
+
+    if (frozen) {
+      playerData.sprite.setTint(0x88ccff);
+
+      if (!playerData.frozenParticles) {
+        playerData.frozenParticles = this.add.particles(
+          playerData.sprite.x,
+          playerData.sprite.y,
+          this.freezeParticleTexture,
+          {
+            speed: { min: 10, max: 30 },
+            scale: { start: 0.5, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: 800,
+            frequency: 100,
+            quantity: 1,
+            follow: playerData.sprite,
+            tint: 0x88ccff,
+          }
+        );
+        playerData.frozenParticles.setDepth(12);
+      }
+    } else {
+      playerData.sprite.clearTint();
+      if (playerData.frozenParticles) {
+        playerData.frozenParticles.stop();
+        playerData.frozenParticles.destroy();
+        playerData.frozenParticles = undefined;
+      }
+    }
+  }
+
+  /**
+   * Update projectiles from server state
+   */
+  private updateProjectiles(projectileStates: ProjectileState[]): void {
+    const activeIds = new Set<string>();
+
+    for (const state of projectileStates) {
+      if (!state.projectileId || !state.position) continue;
+
+      activeIds.add(state.projectileId);
+
+      let projectileData = this.projectiles.get(state.projectileId);
+
+      if (!projectileData) {
+        const sprite = this.add.sprite(
+          state.position.x,
+          state.position.y,
+          "potion-idle"
+        );
+        sprite.setScale(1);
+        sprite.setDepth(15);
+
+        const angle = state.target
+          ? Phaser.Math.Angle.Between(
+              state.position.x,
+              state.position.y,
+              state.target.x,
+              state.target.y
+            )
+          : 0;
+        sprite.setRotation(angle);
+
+        sprite.play("potion-idle");
+        sprite.chain("potion-flying");
+
+        projectileData = {
+          sprite,
+          targetX: state.target?.x ?? state.position.x,
+          targetY: state.target?.y ?? state.position.y,
+          type: state.type,
+        };
+        this.projectiles.set(state.projectileId, projectileData);
+      }
+
+      if (state.active && state.position) {
+        projectileData.sprite.x = Phaser.Math.Linear(
+          projectileData.sprite.x,
+          state.position.x,
+          0.5
+        );
+        projectileData.sprite.y = Phaser.Math.Linear(
+          projectileData.sprite.y,
+          state.position.y,
+          0.5
+        );
+        projectileData.sprite.setVisible(true);
+      } else {
+        // The server says the projectile is dead (impacted)
+        // Remove from the logical map immediately so we don't try to update it again
+        if (!state.active) {
+          projectileData.sprite.x = state.position.x;
+          projectileData.sprite.y = state.position.y;
+          projectileData.sprite.play("potion-explode");
+          this.time.delayedCall(50, () => {
+            projectileData.sprite.destroy();
+            this.projectiles.delete(state.projectileId);
+          });
+        }
+      }
+    }
+
+    this.projectiles.forEach((data, id) => {
+      if (!activeIds.has(id)) {
+        data.sprite.destroy();
+        this.projectiles.delete(id);
+      }
+    });
+  }
+
   destroy() {
     EventBus.removeListener("multiplayer-game-state");
     EventBus.removeListener("multiplayer-player-joined");
     EventBus.removeListener("multiplayer-player-left");
     EventBus.removeListener("set-local-player-id");
+
+    this.projectiles.forEach((data) => {
+      data.sprite.destroy();
+    });
+    this.projectiles.clear();
+
+    this.players.forEach((data) => {
+      if (data.frozenParticles) {
+        data.frozenParticles.destroy();
+      }
+    });
+
+    if (this.localPlayer?.frozenParticles) {
+      this.localPlayer.frozenParticles.destroy();
+    }
 
     this.minimap?.destroy();
     this.minimap = null;

@@ -5,6 +5,8 @@ import {
   GameMessageType,
 } from "@common/gen/multiplayer/v1/messages_pb";
 import {
+  ActionType,
+  GameActionSchema,
   InputActionSchema,
   InputType,
   PlayerEventSchema,
@@ -366,12 +368,50 @@ const MultiplayerPhaserGame = ({
       ws.send(toBinary(GameMessageSchema, message));
     };
 
+    const handleSendGameAction = (data: {
+      action: "throwPotion";
+      targetX: number;
+      targetY: number;
+    }) => {
+      if (!ws || !isConnected) return;
+
+      let actionType: (typeof ActionType)[keyof typeof ActionType];
+      switch (data.action) {
+        case "throwPotion":
+          actionType = ActionType.THROW_POTION;
+          break;
+        default:
+          return;
+      }
+
+      const playerEvent = create(PlayerEventSchema, {
+        type: PlayerEventType.ACTION,
+        playerId: { value: getPlayerId() },
+        gameAction: create(GameActionSchema, {
+          action: actionType,
+          target: { x: data.targetX, y: data.targetY },
+        }),
+      });
+
+      const message = create(GameMessageSchema, {
+        type: GameMessageType.PLAYER_EVENT,
+        payload: {
+          case: "playerEvent",
+          value: playerEvent,
+        },
+      });
+
+      ws.send(toBinary(GameMessageSchema, message));
+    };
+
     EventBus.on("send-input-change", handleSendInputChange);
     EventBus.on("send-player-join", handleSendJoin);
+    EventBus.on("send-game-action", handleSendGameAction);
 
     return () => {
       EventBus.removeListener("send-input-change");
       EventBus.removeListener("send-player-join");
+      EventBus.removeListener("send-game-action");
     };
   }, [ws, isConnected]);
 

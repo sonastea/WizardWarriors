@@ -147,6 +147,22 @@ func (hub *Hub) ListenPubSub(ctx context.Context) {
 									// Broadcast updated lobby state
 									hub.broadcastLobbyState()
 								}
+
+							case multiplayerv1.PlayerEventType_PLAYER_EVENT_TYPE_ACTION:
+								// Handle game actions (fire, abilities, etc.)
+								logger.Info("Received ACTION event from player %v", playerEvent.PlayerId)
+								if playerEvent.PlayerId != nil && playerEvent.GameAction != nil {
+									logger.Info("Processing game action: %v with target (%.1f, %.1f)",
+										playerEvent.GameAction.Action,
+										playerEvent.GameAction.Target.GetX(),
+										playerEvent.GameAction.Target.GetY())
+									hub.handleGameAction(
+										playerEvent.PlayerId.Value,
+										playerEvent.GameAction,
+									)
+								} else {
+									logger.Warn("ACTION event missing PlayerId or GameAction")
+								}
 							}
 						}
 
@@ -176,4 +192,29 @@ func toWire(m *multiplayerv1.GameMessage) ([]byte, error) {
 	}
 
 	return wire, nil
+}
+
+// handleGameAction processes game actions like throwing potions
+func (hub *Hub) handleGameAction(playerID string, action *multiplayerv1.GameAction) {
+	if action == nil {
+		return
+	}
+
+	switch action.Action {
+	case multiplayerv1.ActionType_ACTION_TYPE_THROW_POTION:
+		hub.gameStateManager.SpawnFreezePotion(
+			playerID,
+			action.Target.X,
+			action.Target.Y,
+		)
+		logger.Debug("Player %s threw potion toward (%.1f, %.1f)",
+			playerID, action.Target.X, action.Target.Y)
+
+	case multiplayerv1.ActionType_ACTION_TYPE_INTERACT:
+		// TODO: Implement interact action
+		logger.Debug("Player %s used interact (not implemented)", playerID)
+
+	default:
+		logger.Warn("Unknown action type: %v from player %s", action.Action, playerID)
+	}
 }

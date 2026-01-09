@@ -25,25 +25,31 @@ type PlayerState struct {
 	MoveDown  bool
 	MoveLeft  bool
 	MoveRight bool
+
+	IsFrozen    bool
+	FrozenUntil time.Time
 }
 
 type GameStateManager struct {
-	mu       sync.RWMutex
-	players  map[string]*PlayerState
-	hub      *Hub
-	gameMap  *GameMap
-	tickRate time.Duration
-	lastTick time.Time
+	mu                sync.RWMutex
+	players           map[string]*PlayerState
+	hub               *Hub
+	gameMap           *GameMap
+	tickRate          time.Duration
+	lastTick          time.Time
+	projectileManager *ProjectileManager
 }
 
 func NewGameStateManager(hub *Hub, gameMap *GameMap, tickRate time.Duration) *GameStateManager {
-	return &GameStateManager{
+	gsm := &GameStateManager{
 		players:  make(map[string]*PlayerState),
 		hub:      hub,
 		gameMap:  gameMap,
 		tickRate: tickRate,
 		lastTick: time.Now(),
 	}
+	gsm.projectileManager = NewProjectileManager(gsm)
+	return gsm
 }
 
 // AddPlayer spawns a player at a random valid position within map bounds
@@ -108,6 +114,45 @@ func (gsm *GameStateManager) UpdatePlayerInputAction(userID string, inputAction 
 	}
 }
 
+// FreezePlayer freezes a player for the specified duration in seconds
+func (gsm *GameStateManager) FreezePlayer(userID string, duration float64) {
+	gsm.mu.Lock()
+	defer gsm.mu.Unlock()
+
+	if player, exists := gsm.players[userID]; exists {
+		player.IsFrozen = true
+		player.FrozenUntil = time.Now().Add(time.Duration(duration * float64(time.Second)))
+	}
+}
+
+// updateFreezeStates checks and unfreezes players whose freeze duration has expired
+func (gsm *GameStateManager) updateFreezeStates() {
+	now := time.Now()
+	for _, player := range gsm.players {
+		if player.IsFrozen && now.After(player.FrozenUntil) {
+			player.IsFrozen = false
+		}
+	}
+}
+
+// SpawnFreezePotion spawns a freeze potion projectile from the given player
+func (gsm *GameStateManager) SpawnFreezePotion(ownerID string, targetX, targetY float32) string {
+	gsm.mu.RLock()
+	player, exists := gsm.players[ownerID]
+	gsm.mu.RUnlock()
+
+	if !exists {
+		return ""
+	}
+
+	return gsm.projectileManager.SpawnFreezePotion(ownerID, player.X, player.Y, targetX, targetY)
+}
+
+// GetProjectileManager returns the projectile manager
+func (gsm *GameStateManager) GetProjectileManager() *ProjectileManager {
+	return gsm.projectileManager
+}
+
 // clamp restricts a value to be within [min, max]
 func clamp(value, min, max float32) float32 {
 	if value < min {
@@ -122,6 +167,11 @@ func clamp(value, min, max float32) float32 {
 // simulateMovement processes all player inputs and updates positions
 func (gsm *GameStateManager) simulateMovement(deltaSeconds float32) {
 	for _, player := range gsm.players {
+		// Skip movement if frozen
+		if player.IsFrozen {
+			continue
+		}
+
 		// Determine speed based on terrain
 		speed := PlayerSpeed
 		if gsm.gameMap.IsInSlowdown(player.X, player.Y) {
@@ -214,6 +264,12 @@ func (gsm *GameStateManager) tick() {
 	deltaSeconds := float32(now.Sub(gsm.lastTick).Seconds())
 	gsm.lastTick = now
 
+	// Update freeze states (unfreeze expired)
+	gsm.updateFreezeStates()
+
+	// Update projectiles
+	gsm.projectileManager.Update(deltaSeconds, gsm.players)
+
 	// Simulate all player movement based on their inputs
 	gsm.simulateMovement(deltaSeconds)
 
@@ -226,19 +282,30 @@ func (gsm *GameStateManager) tick() {
 	// Build game state message
 	playerStates := make([]*multiplayerv1.PlayerState, 0, len(gsm.players))
 	for _, player := range gsm.players {
+		frozenUntilUnix := float32(0)
+		if player.IsFrozen {
+			frozenUntilUnix = float32(player.FrozenUntil.Unix())
+		}
+
 		playerStates = append(playerStates, &multiplayerv1.PlayerState{
 			PlayerId: &multiplayerv1.ID{Value: player.UserID},
 			Position: &multiplayerv1.Vector2{
 				X: player.X,
 				Y: player.Y,
 			},
+			IsFrozen:    player.IsFrozen,
+			FrozenUntil: frozenUntilUnix,
 		})
 	}
+
+	// Get projectile states
+	projectileStates := gsm.projectileManager.GetActiveProjectiles()
 
 	gsm.mu.Unlock()
 
 	gameState := &multiplayerv1.GameState{
-		Players: playerStates,
+		Players:     playerStates,
+		Projectiles: projectileStates,
 	}
 
 	gameMsg := &multiplayerv1.GameMessage{
@@ -254,4 +321,6 @@ func (gsm *GameStateManager) tick() {
 	}
 
 	gsm.hub.broadcastToClients(wire)
+
+	gsm.projectileManager.CleanupInactiveProjectiles()
 }

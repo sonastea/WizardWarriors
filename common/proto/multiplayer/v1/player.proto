@@ -51,11 +51,9 @@ message GameAction {
 }
 
 enum ActionType {
-  ACTION_TYPE_UNSPECIFIED  = 0;
-  ACTION_TYPE_PRIMARY_FIRE = 1; // e.g., fireball
-  ACTION_TYPE_ABILITY_1    = 2;
-  ACTION_TYPE_ABILITY_2    = 3;
-  ACTION_TYPE_INTERACT     = 4;
+  ACTION_TYPE_UNSPECIFIED   = 0;
+  ACTION_TYPE_THROW_POTION  = 1;
+  ACTION_TYPE_INTERACT      = 2;
 }
 
 // Deprecated: Full input state - prefer InputAction for efficiency

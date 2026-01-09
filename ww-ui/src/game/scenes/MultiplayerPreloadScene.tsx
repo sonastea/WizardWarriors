@@ -41,20 +41,6 @@ export default class MultiplayerPreloadScene extends Scene {
     this.load.image("tiles", "assets/DesertTilemap.png");
     this.load.tilemapTiledJSON("map", "assets/multiplayer_map.json");
 
-    this.load.spritesheet("player", "assets/player/player.png", {
-      frameWidth: 16,
-      frameHeight: 16,
-      startFrame: 0,
-      endFrame: 23,
-    });
-
-    this.load.spritesheet("ally", "assets/player/ally.png", {
-      frameWidth: 16,
-      frameHeight: 16,
-      startFrame: 9,
-      endFrame: 17,
-    });
-
     this.load.spritesheet(
       "multiplayer-sheet",
       "assets/MultiplayerSpriteSheet.png",
@@ -110,6 +96,21 @@ export default class MultiplayerPreloadScene extends Scene {
       }),
       frameRate: 8,
       repeat: -1,
+    });
+
+    this.anims.create({
+      key: "potion-idle",
+      frames: [{ key: "multiplayer-sheet", frame: 240 }],
+    });
+
+    this.anims.create({
+      key: "potion-flying",
+      frames: [{ key: "multiplayer-sheet", frame: 241 }],
+    });
+
+    this.anims.create({
+      key: "potion-explode",
+      frames: [{ key: "multiplayer-sheet", frame: 242 }],
     });
 
     this.scene.start(CONSTANTS.SCENES.MULTIPLAYER_LOBBY);
