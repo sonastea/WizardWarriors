@@ -646,87 +646,102 @@ const MultiplayerPhaserGame = ({
           position: "absolute",
           bottom: "20px",
           right: "20px",
-          width: "300px",
+          display: "flex",
+          alignItems: "flex-end",
           zIndex: 100,
         }}
       >
-        <div
+        <span
           style={{
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            padding: "10px",
-            borderRadius: "4px",
-            marginBottom: "10px",
-            maxHeight: "200px",
-            overflowY: "auto",
+            paddingRight: "8px",
+            paddingBottom: "8px",
+            color: "#4a9eff",
+            fontSize: "12px",
+            fontWeight: "bold",
+            whiteSpace: "nowrap",
           }}
         >
-          {chatMessages.length > 0 ? (
-            chatMessages.slice(-10).map((msg, idx) => (
-              <div
-                key={idx}
-                style={{
-                  marginBottom: "6px",
-                  fontSize: "12px",
-                  color: "white",
-                }}
-              >
-                <span style={{ color: "#4a9eff", fontWeight: "bold" }}>
-                  {msg.username}:
-                </span>{" "}
-                <span>{msg.message}</span>
-              </div>
-            ))
-          ) : (
-            <div style={{ color: "#888", fontSize: "12px" }}>No messages</div>
-          )}
-        </div>
-
-        <form onSubmit={handleSendChat} style={{ display: "flex" }}>
-          <input
-            ref={chatInputRef}
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onFocus={() => setIsChatFocused(true)}
-            onBlur={() => setIsChatFocused(false)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") {
-                e.preventDefault();
-                focusGame();
-              }
-            }}
-            onKeyUp={(e) => e.stopPropagation()}
-            placeholder="Press Enter to chat..."
-            disabled={!isConnected}
+          {gameStats.username}:
+        </span>
+        <div style={{ width: "300px" }}>
+          <div
             style={{
-              flex: 1,
-              padding: "8px",
               backgroundColor: "rgba(0, 0, 0, 0.8)",
-              border: isChatFocused ? "1px solid #4a9eff" : "1px solid #444",
-              borderRadius: "4px 0 0 4px",
-              color: "white",
-              outline: "none",
-              fontSize: "12px",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={!isConnected}
-            style={{
-              padding: "8px 12px",
-              backgroundColor: isConnected ? "#4a9eff" : "#666",
-              border: "none",
-              borderRadius: "0 4px 4px 0",
-              color: "white",
-              cursor: isConnected ? "pointer" : "not-allowed",
-              fontSize: "12px",
-              fontWeight: "bold",
+              padding: "10px",
+              borderRadius: "4px",
+              marginBottom: "10px",
+              maxHeight: "200px",
+              overflowY: "auto",
             }}
           >
-            Send
-          </button>
-        </form>
+            {chatMessages.length > 0 ? (
+              chatMessages.slice(-10).map((msg, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    marginBottom: "6px",
+                    fontSize: "12px",
+                    color: "white",
+                  }}
+                >
+                  <span style={{ color: "#4a9eff", fontWeight: "bold" }}>
+                    {msg.username}:
+                  </span>{" "}
+                  <span>{msg.message}</span>
+                </div>
+              ))
+            ) : (
+              <div style={{ color: "#888", fontSize: "12px" }}>No messages</div>
+            )}
+          </div>
+
+          <form onSubmit={handleSendChat} style={{ display: "flex" }}>
+            <input
+              ref={chatInputRef}
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onFocus={() => setIsChatFocused(true)}
+              onBlur={() => setIsChatFocused(false)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  focusGame();
+                }
+              }}
+              onKeyUp={(e) => e.stopPropagation()}
+              placeholder="Press Enter to chat..."
+              disabled={!isConnected}
+              style={{
+                flex: 1,
+                padding: "8px",
+                backgroundColor: "rgba(0, 0, 0, 0.8)",
+                border: isChatFocused ? "1px solid #4a9eff" : "1px solid #444",
+                borderRadius: "4px 0 0 4px",
+                color: "white",
+                outline: "none",
+                fontSize: "12px",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!isConnected}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: isConnected ? "#4a9eff" : "#666",
+                border: "none",
+                borderRadius: "0 4px 4px 0",
+                color: "white",
+                cursor: isConnected ? "pointer" : "not-allowed",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            >
+              Send
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Login Modal for guests */}
