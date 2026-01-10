@@ -7,6 +7,7 @@ import { NextPage } from "next/types";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { gameStatsAtom } from "src/state";
 import styles from "../styles/index.module.css";
+import mpStyles from "../styles/multiplayer.module.css";
 
 const MultiplayerPhaserGame = lazy(
   () => import("../game/MultiplayerPhaserGame")
@@ -159,11 +160,7 @@ const MultiplayerPage: NextPage = () => {
   if (error) {
     return (
       <div className={styles.container}>
-        <p
-          style={{ color: "#ff6b6b", fontSize: "1.2rem", textAlign: "center" }}
-        >
-          {error}
-        </p>
+        <p className={mpStyles.errorText}>{error}</p>
         <button
           onClick={() => {
             setError(null);
@@ -172,15 +169,7 @@ const MultiplayerPage: NextPage = () => {
             setIsReady(false);
             joinMultiplayerQuery.refetch();
           }}
-          style={{
-            marginTop: "1rem",
-            padding: "10px 20px",
-            backgroundColor: "#4a9eff",
-            border: "none",
-            borderRadius: "4px",
-            color: "white",
-            cursor: "pointer",
-          }}
+          className={mpStyles.retryButton}
         >
           Try Again
         </button>
@@ -198,7 +187,7 @@ const MultiplayerPage: NextPage = () => {
           height={64}
           loading="eager"
         />
-        <p style={{ color: "white", marginTop: "1rem" }}>
+        <p className={mpStyles.loadingText}>
           {joinMultiplayerQuery.isFetching
             ? "Connecting to multiplayer..."
             : "Loading..."}

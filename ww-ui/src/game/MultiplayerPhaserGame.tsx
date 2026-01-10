@@ -21,6 +21,7 @@ import { RefObject, useCallback, useEffect, useRef, useState } from "react";
 import LoginModal from "src/components/LoginModal";
 import { gameStatsAtom } from "src/state";
 import { EventBus } from "./EventBus";
+import styles from "./MultiplayerPhaserGame.module.css";
 
 import MultiplayerGameScene from "./scenes/MultiplayerGame";
 import MultiplayerLobbyScene from "./scenes/MultiplayerLobby";
@@ -461,157 +462,124 @@ const MultiplayerPhaserGame = ({
   };
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
-        backgroundColor: "#1a1a1a",
-      }}
-    >
+    <div className={styles.container}>
       <div
         id="game-content"
         ref={gameRef}
         onClick={focusGame}
-        style={{ width: "100%", height: "100%" }}
+        className={styles.gameContent}
       />
 
       {/* Lobby UI Overlay - only show when not ready */}
       {!isReady && (
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            maxWidth: "300px",
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            padding: "15px",
-            borderRadius: "8px",
-            color: "white",
-            zIndex: 100,
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Lobby</h3>
+        <div className={styles.lobbyOverlay}>
+          {/* Corner accents */}
+          <span
+            className={`${styles.cornerAccent} ${styles.cornerTopLeft}`}
+          />
+          <span
+            className={`${styles.cornerAccent} ${styles.cornerTopRight}`}
+          />
+          <span
+            className={`${styles.cornerAccent} ${styles.cornerBottomLeft}`}
+          />
+          <span
+            className={`${styles.cornerAccent} ${styles.cornerBottomRight}`}
+          />
 
-          {error && (
-            <div
-              style={{
-                padding: "8px",
-                backgroundColor: "#ff4444",
-                borderRadius: "4px",
-                marginBottom: "10px",
-                fontSize: "12px",
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          {isConnecting && (
-            <div style={{ fontSize: "14px", marginBottom: "10px" }}>
-              Connecting...
-            </div>
-          )}
+          {/* Status */}
+          <div
+            className={`${styles.statusText} ${error ? styles.statusError : ""}`}
+          >
+            {error ? error : isConnecting ? "Connecting..." : "Not Ready"}
+          </div>
 
           {isConnected && (
             <>
-              <div style={{ marginBottom: "15px" }}>
-                <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                  Waiting ({lobbyUsers.length}):{" "}
+              {/* Player lists */}
+              <div className={styles.playerListsContainer}>
+                {/* Waiting */}
+                <div className={styles.playerListColumn}>
+                  <div
+                    className={`${styles.playerListLabel} ${styles.playerListLabelWaiting}`}
+                  >
+                    Waiting ({lobbyUsers.length})
+                  </div>
+                  <div className={styles.playerList}>
+                    {lobbyUsers.length > 0 ? (
+                      lobbyUsers.map((user, idx) => (
+                        <div
+                          key={idx}
+                          className={`${styles.playerItem} ${
+                            user.name === gameStats.username
+                              ? styles.playerItemSelf
+                              : styles.playerItemWaiting
+                          }`}
+                        >
+                          {user.name}
+                          {user.name === gameStats.username && (
+                            <span className={styles.playerYouTag}>(You)</span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className={styles.emptyList}>—</div>
+                    )}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: "#1a1a1a",
-                    padding: "8px",
-                    borderRadius: "4px",
-                    maxHeight: "60px",
-                    overflowY: "auto",
-                    fontSize: "12px",
-                  }}
-                >
-                  {lobbyUsers.length > 0 ? (
-                    lobbyUsers.map((user, idx) => (
-                      <div
-                        key={idx}
-                        style={{ padding: "2px 0", color: "#aaa" }}
-                      >
-                        {user.name}
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ color: "#888" }}>No players waiting</div>
-                  )}
+
+                {/* In Game */}
+                <div className={styles.playerListColumn}>
+                  <div
+                    className={`${styles.playerListLabel} ${styles.playerListLabelInGame}`}
+                  >
+                    In Game ({gameUsers.length})
+                  </div>
+                  <div className={styles.playerList}>
+                    {gameUsers.length > 0 ? (
+                      gameUsers.map((user, idx) => (
+                        <div
+                          key={idx}
+                          className={`${styles.playerItem} ${
+                            user.name === gameStats.username
+                              ? styles.playerItemSelf
+                              : styles.playerItemInGame
+                          }`}
+                        >
+                          {user.name}
+                          {user.name === gameStats.username && (
+                            <span className={styles.playerYouTag}>(You)</span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className={styles.emptyList}>—</div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div style={{ marginBottom: "15px" }}>
-                <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                  Gaming ({gameUsers.length}):
-                </div>
-                <div
-                  style={{
-                    backgroundColor: "#1a1a1a",
-                    padding: "8px",
-                    borderRadius: "4px",
-                    maxHeight: "60px",
-                    overflowY: "auto",
-                    fontSize: "12px",
-                  }}
-                >
-                  {gameUsers.length > 0 ? (
-                    gameUsers.map((user, idx) => (
-                      <div
-                        key={idx}
-                        style={{ padding: "2px 0", color: "#44ff44" }}
-                      >
-                        {user.name}
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ color: "#888" }}>No players in game</div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={handleReady}
-                disabled={isReady}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  backgroundColor: isReady ? "#666" : "#44ff44",
-                  border: "none",
-                  borderRadius: "4px",
-                  color: isReady ? "#aaa" : "#000",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: isReady ? "not-allowed" : "pointer",
-                }}
-              >
-                {isReady ? "Ready!" : isGuest ? "Ready as Guest" : "Ready"}
-              </button>
-
-              {isGuest && (
+              {/* Action buttons - horizontal */}
+              <div className={styles.actionButtonsContainer}>
                 <button
-                  onClick={() => setShowLoginModal(true)}
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    marginTop: "8px",
-                    backgroundColor: "#4a9eff",
-                    border: "none",
-                    borderRadius: "4px",
-                    color: "white",
-                    fontSize: "14px",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                  }}
+                  onClick={handleReady}
+                  disabled={isReady}
+                  className={styles.playButton}
                 >
-                  Sign In
+                  {isReady ? "Ready!" : "Play"}
                 </button>
-              )}
 
+                {isGuest && (
+                  <button
+                    onClick={() => setShowLoginModal(true)}
+                    className={styles.signInButton}
+                  >
+                    Sign In
+                  </button>
+                )}
+              </div>
+
+              {/* Leave button */}
               <button
                 type="button"
                 onClick={(e) => {
@@ -620,20 +588,9 @@ const MultiplayerPhaserGame = ({
                   disconnect();
                   onLeave?.();
                 }}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  marginTop: "8px",
-                  backgroundColor: "#666",
-                  border: "none",
-                  borderRadius: "4px",
-                  color: "white",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                }}
+                className={styles.leaveButton}
               >
-                Leave
+                Leave Lobby
               </button>
             </>
           )}
@@ -641,61 +598,25 @@ const MultiplayerPhaserGame = ({
       )}
 
       {/* Chat UI */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          right: "20px",
-          display: "flex",
-          alignItems: "flex-end",
-          zIndex: 100,
-        }}
-      >
-        <span
-          style={{
-            paddingRight: "8px",
-            paddingBottom: "8px",
-            color: "#4a9eff",
-            fontSize: "12px",
-            fontWeight: "bold",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {gameStats.username}:
-        </span>
-        <div style={{ width: "300px" }}>
-          <div
-            style={{
-              backgroundColor: "rgba(0, 0, 0, 0.8)",
-              padding: "10px",
-              borderRadius: "4px",
-              marginBottom: "10px",
-              maxHeight: "200px",
-              overflowY: "auto",
-            }}
-          >
+      <div className={styles.chatContainer}>
+        <span className={styles.chatUsername}>{gameStats.username}:</span>
+        <div className={styles.chatBox}>
+          <div className={styles.chatMessages}>
             {chatMessages.length > 0 ? (
               chatMessages.slice(-10).map((msg, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    marginBottom: "6px",
-                    fontSize: "12px",
-                    color: "white",
-                  }}
-                >
-                  <span style={{ color: "#4a9eff", fontWeight: "bold" }}>
+                <div key={idx} className={styles.chatMessage}>
+                  <span className={styles.chatMessageUsername}>
                     {msg.username}:
                   </span>{" "}
                   <span>{msg.message}</span>
                 </div>
               ))
             ) : (
-              <div style={{ color: "#888", fontSize: "12px" }}>No messages</div>
+              <div className={styles.chatNoMessages}>No messages</div>
             )}
           </div>
 
-          <form onSubmit={handleSendChat} style={{ display: "flex" }}>
+          <form onSubmit={handleSendChat} className={styles.chatForm}>
             <input
               ref={chatInputRef}
               type="text"
@@ -713,30 +634,12 @@ const MultiplayerPhaserGame = ({
               onKeyUp={(e) => e.stopPropagation()}
               placeholder="Press Enter to chat..."
               disabled={!isConnected}
-              style={{
-                flex: 1,
-                padding: "8px",
-                backgroundColor: "rgba(0, 0, 0, 0.8)",
-                border: isChatFocused ? "1px solid #4a9eff" : "1px solid #444",
-                borderRadius: "4px 0 0 4px",
-                color: "white",
-                outline: "none",
-                fontSize: "12px",
-              }}
+              className={styles.chatInput}
             />
             <button
               type="submit"
               disabled={!isConnected}
-              style={{
-                padding: "8px 12px",
-                backgroundColor: isConnected ? "#4a9eff" : "#666",
-                border: "none",
-                borderRadius: "0 4px 4px 0",
-                color: "white",
-                cursor: isConnected ? "pointer" : "not-allowed",
-                fontSize: "12px",
-                fontWeight: "bold",
-              }}
+              className={styles.chatSendButton}
             >
               Send
             </button>
