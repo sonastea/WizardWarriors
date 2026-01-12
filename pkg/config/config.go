@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"os"
 	"strings"
 	"time"
 
@@ -9,26 +10,33 @@ import (
 )
 
 type Config struct {
-	Addr         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Addr          string
+	ReadTimeout   time.Duration
+	WriteTimeout  time.Duration
+	IdleTimeout   time.Duration
+	SessionMaxAge int
 
 	AllowedOrigins []string
 	Debug          bool
+	LogLevel       string
 	DBConnURI      string
 	RedisURL       string
 	RedisOpts      *redis.Options
+	MapPath        string
+	IsAPIServer    bool
 }
 
 // Load parses the command-line arguments into the Config struct
 func (c *Config) Load(args []string) error {
 	fs := flag.NewFlagSet("ww", flag.ContinueOnError)
 
-	fs.StringVar(&c.Addr, "ADDR", ":8080", "database connection uri")
+	fs.StringVar(&c.Addr, "ADDR", ":8080", "binding server address")
 	fs.BoolVar(&c.Debug, "debug", false, "enable debug mode for detailed logging")
 	fs.StringVar(&c.DBConnURI, "DATABASE_URL", "postgresql://postgres:postgres@db/wizardwarriors", "database connection uri")
 	fs.StringVar(&c.RedisURL, "REDIS_URL", "redis://localhost:6379/0", "redis url")
+	fs.IntVar(&c.SessionMaxAge, "SESSION_MAX_AGE", 86400, "session cookie max age in seconds (default: 86400 = 24 hours)")
+	fs.StringVar(&c.MapPath, "MAP_PATH", "pkg/hub/assets/multiplayer_map.json", "path to the game map JSON file")
+	fs.BoolVar(&c.IsAPIServer, "API_SERVER", false, "run as API server (disables game-specific features like pub/sub and game state)")
 
 	var allowedOrigins string
 	fs.StringVar(&allowedOrigins, "ALLOWED_ORIGINS", "http://ww.dev.localhost,http://localhost:3000", "comma-separated list of allowed origins for CORS")
@@ -38,6 +46,11 @@ func (c *Config) Load(args []string) error {
 	}
 
 	c.AllowedOrigins = parseOrigins(allowedOrigins)
+
+	c.LogLevel = os.Getenv("LOG_LEVEL")
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
 
 	return nil
 }

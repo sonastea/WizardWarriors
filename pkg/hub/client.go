@@ -2,12 +2,14 @@ package hub
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/lithammer/shortuuid"
+	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -26,28 +28,42 @@ const (
 
 type Client struct {
 	sync.RWMutex
-	Id       int    `json:"id,string,omitempty"`
-	Xid      string `json:"xid"`
-	Name     string `json:"name,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
+	// UserID is the user's database ID (as string for proto compatibility)
+	UserID   string `json:"user_id"`
+	Username string `json:"username,omitempty"`
 	conn     *websocket.Conn
 
-	hub *Hub
+	hub   *Hub
+	token string
 
-	send chan []byte
+	sendChan chan []byte
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn) error {
-	newId := shortuuid.New()
+func NewClient(hub *Hub, conn *websocket.Conn, token string) error {
+	// Require a valid token for WebSocket connections
+	if token == "" {
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Missing session token"))
+		conn.Close()
+		return fmt.Errorf("missing session token")
+	}
+
+	sessionInfo, err := hub.GetSessionInfo(token)
+	if err != nil || sessionInfo == nil {
+		logger.Warn("Failed to get session info for token: %v", err)
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Invalid or expired session"))
+		conn.Close()
+		return fmt.Errorf("invalid or expired session: %w", err)
+	}
+
 	client := &Client{
-		Xid:      newId,
-		Name:     newId,
-		Email:    newId + "example.com",
-		Password: "",
+		UserID:   sessionInfo.UserID,
+		Username: sessionInfo.Username,
 		hub:      hub,
 		conn:     conn,
-		send:     make(chan []byte),
+		token:    token,
+		sendChan: make(chan []byte),
 	}
 
 	hub.register <- client
@@ -55,39 +71,41 @@ func NewClient(hub *Hub, conn *websocket.Conn) error {
 	go client.writePump()
 	go client.readPump()
 
-    return nil
+	return nil
 }
 
-func (client *Client) GetId() int {
-	return client.Id
-}
-
-func (client *Client) GetXid() string {
-	return client.Xid
+func (client *Client) GetUserID() string {
+	return client.UserID
 }
 
 func (client *Client) GetName() string {
-	return client.Name
-}
-
-func (client *Client) GetEmail() string {
-	return client.Email
-}
-
-func (client *Client) GetPassword() string {
-	return client.Password
+	return client.Username
 }
 
 func (client *Client) readPump() {
 	defer func() {
+		close(client.sendChan)
 		client.hub.unregister <- client
-		close(client.send)
 		client.conn.Close()
 	}()
 
 	client.conn.SetReadLimit(maxMessageSize)
 	client.conn.SetReadDeadline(time.Now().Add(pongWait))
-	client.conn.SetPongHandler(func(string) error { client.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	client.conn.SetPongHandler(func(string) error {
+		client.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if client.token != "" {
+			if err := client.hub.RefreshSession(client.token); err != nil {
+				logger.Debug("Failed to refresh session for %s: %v", client.Username, err)
+			}
+		}
+		return nil
+	})
+
+	client.conn.SetCloseHandler(func(code int, text string) error {
+		message := websocket.FormatCloseMessage(code, "Goodbye! Connection closing.")
+		client.conn.WriteControl(websocket.CloseMessage, message, time.Now().Add(writeWait))
+		return nil
+	})
 
 	for {
 		_, message, err := client.conn.ReadMessage()
@@ -96,12 +114,47 @@ func (client *Client) readPump() {
 				websocket.CloseGoingAway,
 				websocket.CloseAbnormalClosure,
 				websocket.CloseNormalClosure) {
-				log.Printf("error: %v", err)
+				logger.Error("WebSocket error: %v", err)
 			}
+			logger.Info("%s (%s) disconnected", client.Username, client.UserID)
+
+			// Handle player leaving - notify game state using their UserID
+			client.hub.gameStateManager.RemovePlayer(client.UserID)
 			break
 		}
-		client.hub.pubsub.conn.Publish(context.Background(), "lobby", message)
+
+		// Inject sender info into chat messages before publishing
+		message = client.injectSenderInfo(message)
+
+		client.hub.pubsub.conn.Publish(context.Background(), "chat.lobby", message)
 	}
+}
+
+// injectSenderInfo adds sender ID and username to chat messages
+func (client *Client) injectSenderInfo(message []byte) []byte {
+	gameMsg := &multiplayerv1.GameMessage{}
+	if err := proto.Unmarshal(message, gameMsg); err != nil {
+		return message
+	}
+
+	// Only inject sender info for chat messages
+	if gameMsg.Type == multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_CHAT_MESSAGE {
+		if chatMsg := gameMsg.GetChatMessage(); chatMsg != nil {
+			// Set sender ID and name from client info
+			chatMsg.SenderId = &multiplayerv1.ID{Value: client.UserID}
+			chatMsg.SenderName = client.Username
+
+			// Re-marshal the modified message
+			modified, err := proto.Marshal(gameMsg)
+			if err != nil {
+				logger.Error("Failed to marshal modified chat message: %v", err)
+				return message
+			}
+			return modified
+		}
+	}
+
+	return message
 }
 
 func (client *Client) writePump() {
@@ -113,7 +166,7 @@ func (client *Client) writePump() {
 
 	for {
 		select {
-		case msg, ok := <-client.send:
+		case msg, ok := <-client.sendChan:
 			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
@@ -128,9 +181,8 @@ func (client *Client) writePump() {
 
 			w.Write(msg)
 
-			n := len(client.send)
-			for i := 0; i < n; i++ {
-				w.Write(<-client.send)
+			for range len(client.sendChan) {
+				w.Write(<-client.sendChan)
 			}
 
 			if err := w.Close(); err != nil {

@@ -14,6 +14,7 @@ import Enemy from "../entity/enemy";
 import Slime from "../entity/slime";
 import { Game as GameScene } from "../scenes/Game";
 import Fireball from "../entity/fireball";
+import { Minimap, EnemyData } from "../ui/Minimap";
 
 export class Game extends Scene {
   player: Player | null;
@@ -32,9 +33,11 @@ export class Game extends Scene {
 
   collisionLayer: Phaser.Tilemaps.TilemapLayer | null = null;
   elevationLayer: Phaser.Tilemaps.TilemapLayer | null = null;
+  terrainLayer: Phaser.Tilemaps.TilemapLayer | null = null;
 
   private allySpawnTimer?: Phaser.Time.TimerEvent;
   private enemySpawnTimer?: Phaser.Time.TimerEvent;
+  private minimap: Minimap | null = null;
 
   chatBox: Phaser.GameObjects.Container | null = null;
 
@@ -57,6 +60,8 @@ export class Game extends Scene {
   /**
    * Spawn entities in batches to prevent browser lockup
    * Spreads expensive spawning operations across multiple frames
+   * Note: This is used for loading saved games - it does NOT increment stats
+   * since the stats are already set from the save data
    */
   private batchSpawnEntities(totalAllies: number, totalEnemies: number): void {
     const BATCH_SIZE = 10;
@@ -66,7 +71,7 @@ export class Game extends Scene {
     const spawnBatch = () => {
       const alliesToSpawn = Math.min(BATCH_SIZE, totalAllies - alliesSpawned);
       for (let i = 0; i < alliesToSpawn; i++) {
-        this.spawnAlly();
+        this.spawnEntityWithoutStats(Ally, ENTITY.ALLY, this.allies);
         alliesSpawned++;
       }
 
@@ -75,7 +80,7 @@ export class Game extends Scene {
         totalEnemies - enemiesSpawned
       );
       for (let i = 0; i < enemiesToSpawn; i++) {
-        this.spawnEnemy();
+        this.spawnEntityWithoutStats(Slime, ENTITY.ENEMY.SLIME, this.enemies);
         enemiesSpawned++;
       }
 
@@ -92,6 +97,23 @@ export class Game extends Scene {
   }
 
   private spawnEntity<T extends Phaser.GameObjects.Sprite>(
+    entityClass: new (
+      scene: GameScene,
+      x: number,
+      y: number,
+      type: string
+    ) => T,
+    entityType: string,
+    group: Phaser.Physics.Arcade.Group
+  ): void {
+    this.spawnEntityWithoutStats(entityClass, entityType, group);
+  }
+
+  /**
+   * Spawns an entity without updating game stats.
+   * Used when loading saved games where stats are already set.
+   */
+  private spawnEntityWithoutStats<T extends Phaser.GameObjects.Sprite>(
     entityClass: new (
       scene: GameScene,
       x: number,
@@ -170,6 +192,9 @@ export class Game extends Scene {
 
     this.player = null;
 
+    this.minimap?.destroy();
+    this.minimap = null;
+
     this.scene.stop();
     this.scene.start(CONSTANTS.SCENES.GAME_OVER);
   }
@@ -234,14 +259,22 @@ export class Game extends Scene {
     const groundLayer = map.createLayer("ground", tileset, 0, 0);
     this.elevationLayer = map.createLayer("elevation", tileset, 0, 0);
     this.collisionLayer = map.createLayer("collisions", tileset, 0, 0);
+    this.terrainLayer = map.createLayer("terrain", tileset, 0, 0);
 
     this.collisionLayer?.setCollisionBetween(45, 54);
+    this.collisionLayer?.setCollision([
+      138, 139, 140, 152, 153, 154, 166, 167, 168,
+    ]);
+
     this.elevationLayer?.setCollisionBetween(79, 81);
     this.elevationLayer?.setCollisionBetween(93, 95);
     this.elevationLayer?.setCollisionBetween(107, 109);
 
     this.collisionLayer?.setTileIndexCallback(
-      [45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
+      [
+        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 138, 139, 140, 152, 153, 154,
+        166, 167, 168,
+      ],
       this.onCollideWithObstacleTiles,
       this
     );
@@ -264,6 +297,15 @@ export class Game extends Scene {
       groundLayer.setVisible(true);
       this.elevationLayer.setVisible(true);
       this.collisionLayer.setVisible(true);
+
+      this.minimap = new Minimap(this, {
+        worldWidth: mapWidth,
+        worldHeight: mapHeight,
+        width: 150,
+        height: 85,
+      });
+
+      this.minimap.renderLayers(this.collisionLayer, this.elevationLayer);
     }
 
     this.input?.keyboard?.on("keydown-ESC", () => {
@@ -294,12 +336,13 @@ export class Game extends Scene {
       },
     });
 
-    this.physics.add.overlap(this.enemies, this.player, (enemy, player) => {
-      (enemy as Player).attackTarget(player as Player);
+    this.physics.add.overlap(this.player, this.enemies, (player, enemy) => {
+      (enemy as Enemy).attackTarget(player as Player);
     });
 
     this.physics.add.overlap(this.enemies, this.allies, (enemy, ally) => {
       (enemy as Enemy).attackTarget(ally as Ally);
+      (ally as Ally).attackTarget(enemy as Enemy);
     });
 
     this.physics.add.overlap(this.fireballPool, this.enemies, (f, e) => {
@@ -377,5 +420,20 @@ export class Game extends Scene {
 
   update(time: number, delta: number) {
     this.player?.update(time, delta);
+
+    if (this.minimap && this.player) {
+      this.minimap.update(this.player.x, this.player.y);
+
+      const enemyData = new Map<string, EnemyData>();
+      for (const enemy of this.getEnemies) {
+        if (enemy.active) {
+          enemyData.set(enemy.id, {
+            worldX: enemy.x,
+            worldY: enemy.y,
+          });
+        }
+      }
+      this.minimap.updateEnemies(enemyData);
+    }
   }
 }

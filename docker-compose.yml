@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: "traefik:v3.1.7"
+    image: "traefik:v3.6.2"
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
@@ -15,12 +15,13 @@ services:
       - wiznet
 
   db:
-    image: "postgres:17.4"
+    image: "postgres:18.1"
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: wizardwarriors
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "5432:5432"
     volumes:
@@ -29,8 +30,24 @@ services:
       - traefik
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
-      interval: 5s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wiznet
+
+  redis:
+    image: "redis:8.4"
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
       retries: 5
     networks:
       - wiznet
@@ -44,6 +61,8 @@ services:
         REDIS_URL: redis://localhost:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db/wizardwarriors
@@ -95,5 +114,7 @@ networks:
     driver: bridge
 
 volumes:
+  redis:
+    driver: local
   pg-data-volume:
     external: false

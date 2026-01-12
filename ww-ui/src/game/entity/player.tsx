@@ -115,6 +115,8 @@ export default class Player extends Entity {
   update(_time: number, _delta: number): void {
     if (!this.scene.input.keyboard) return;
 
+    this.updateTerrainEffects();
+
     if (this.keys.W.isDown || this.keys.UP.isDown) {
       this.setVelocityY(-1 * this.speed);
       this.playAnimationCached(ANIMS.PLAYER.UP);

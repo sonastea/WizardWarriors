@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/sonastea/WizardWarriors/pkg/config"
 	db "github.com/sonastea/WizardWarriors/pkg/database"
+	"github.com/sonastea/WizardWarriors/pkg/handler"
 	"github.com/sonastea/WizardWarriors/pkg/hub"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
+	"github.com/sonastea/WizardWarriors/pkg/repository"
 	"github.com/sonastea/WizardWarriors/pkg/server"
-	"github.com/sonastea/WizardWarriors/pkg/store"
+	"github.com/sonastea/WizardWarriors/pkg/service"
 )
 
 func main() {
@@ -19,26 +22,42 @@ func main() {
 	cfg := &config.Config{}
 	cfg.Load(os.Args[1:])
 	cfg.RedisOpts = config.NewRedisOpts(cfg.RedisURL)
+	cfg.IsAPIServer = true
 
-	_, err := pgxpool.New(context.Background(), cfg.DBConnURI)
+	if err := logger.SetLevelFromString(cfg.LogLevel); err != nil {
+		logger.Warn("Invalid log level '%s', using default 'info'", cfg.LogLevel)
+	}
+
+	redisClient := redis.NewClient(cfg.RedisOpts)
+
+	h, err := hub.New(cfg)
 	if err != nil {
 		panic(err)
 	}
-	// redis := redis.NewClient(cfg.RedisOpts)
+
+	_, err = pgxpool.New(context.Background(), cfg.DBConnURI)
+	if err != nil {
+		panic(err)
+	}
+
 	pool := db.NewConnPool(ctx, cfg.DBConnURI)
 
-	stores := hub.Stores{}
-	stores.UserStore = store.NewUserStore(pool)
+	userRepo := repository.NewUserRepository(pool, redisClient)
+	gameRepo := repository.NewGameRepository(pool, redisClient)
 
-	hub, err := hub.New(cfg, stores, nil)
+	apiService := service.NewApiService(userRepo, gameRepo)
+
+	apiHandler := handler.NewApiHandler(apiService, cfg.SessionMaxAge)
+
+	apiSrv, err := server.NewServer(
+		cfg,
+		server.WithHub(h),
+		server.WithRedis(redisClient),
+		server.WithApiHandler(apiHandler),
+	)
 	if err != nil {
-		panic(err)
+		logger.Fatal("Unable to create server: %v", err)
 	}
 
-	server, err := server.NewServer(cfg, hub, stores.UserStore)
-	if err != nil {
-		log.Fatalln("Unable to create server")
-	}
-
-	server.Start(hub)
+	apiSrv.Start()
 }

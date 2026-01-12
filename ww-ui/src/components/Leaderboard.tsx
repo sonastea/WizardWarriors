@@ -35,16 +35,16 @@ const Leaderboard = ({ data }: { data: GameStatsResponse[] | null }) => {
           </div>
         ))
       ) : data && data.length > 0 ? (
-        data.slice(0, 15).map((player, index) => (
-          <div key={player.id} className={styles.playerRow}>
+        data.slice(0, 15).map((save, index) => (
+          <div key={save.game_id} className={styles.playerRow}>
             <span className={styles.rank}>{index + 1}</span>
-            <span className={styles.username}>{player.username}</span>
-            <span>{player.player_level}</span>
-            <span className={styles.kills}>{player.player_kills}</span>
+            <span className={styles.username}>{save.username}</span>
+            <span>{save.player_level}</span>
+            <span className={styles.kills}>{save.player_kills}</span>
             {/* <span>{player.team_deaths}</span> */}
-            <span>{player.total_enemies}</span>
-            <span>{player.total_allies}</span>
-            <span>{player.is_game_over ? "✔️" : "⏳"}</span>
+            <span>{save.total_enemies}</span>
+            <span>{save.total_allies}</span>
+            <span>{save.is_game_over ? "✔️" : "⏳"}</span>
           </div>
         ))
       ) : (

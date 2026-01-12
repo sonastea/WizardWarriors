@@ -10,8 +10,8 @@
 
 .button {
   flex: 1 1 auto;
-  min-width: 120px;
-  max-width: 300px;
+  width: 120px;
+  max-width: auto;
   margin: 0.25rem;
   background-color: #3b82f6;
   border: 1px solid #2563eb;
@@ -27,6 +27,13 @@
   cursor: pointer;
   user-select: none;
   transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+}
+
+.buttonMultiplayer {
+  background-color: #5d3fd3;
+  border: 1px solid #5036bf;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.10);
 }
 
 .button:disabled,
@@ -54,13 +61,22 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
+.buttonMultiplayer:hover {
+  background-color: #4f35c2;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.buttonMultiplayer:focus {
+  outline: 2px solid #4d3fd3;
+}
+
 .grayButton {
   background-color: #6b7280;
-  border: 1px solid #374151;
+  border: 1px solid #4b5563;
   color: #e5e7eb;
 }
 
-.grayButton:hover {
+.grayButton:disabled:hover {
   background-color: #4b5563;
 }
 
@@ -234,4 +250,9 @@
   color: #10b981;
   font-style: normal;
   font-weight: 700;
+}
+
+.save:focus {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
 }

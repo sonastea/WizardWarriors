@@ -7,6 +7,17 @@ import Projectile from "./projectile";
 import { EventBus } from "../EventBus";
 import Ally from "./ally";
 
+export const TERRAIN_TILES = {
+  // Water tiles (impassable) - tile indices from terrain layer in map1.json
+  // 29-31: water edges/center tiles
+  WATER: [29, 30, 31],
+  // Slowdown tiles (quicksand/mud/pond) - tile indices from terrain layer
+  // 43-44: pond/shallow water tiles that slow movement
+  SLOWDOWN: [43, 44],
+};
+
+export const SLOWDOWN_MULTIPLIER = 0.4; // 40% of normal speed
+
 export default class Entity extends Phaser.Physics.Arcade.Sprite {
   declare scene: GameScene;
 
@@ -14,7 +25,12 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
   level: number = 1;
   attack: number = 1;
   health: number = 100;
-  speed: number = 100;
+  baseSpeed: number = 100;
+  speedModifier: number = 1.0;
+
+  get speed(): number {
+    return this.baseSpeed * this.speedModifier;
+  }
 
   healthBar!: HealthBar;
 
@@ -40,6 +56,10 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
 
     scene.physics.add.collider(this, scene.collisionLayer!);
     scene.physics.add.collider(this, scene.elevationLayer!);
+
+    if (scene.terrainLayer) {
+      scene.physics.add.collider(this, scene.terrainLayer);
+    }
   }
 
   initializeHealthBar(
@@ -64,6 +84,26 @@ export default class Entity extends Phaser.Physics.Arcade.Sprite {
       this.x - this.displayWidth / 2,
       this.y + this.displayHeight / 1.5
     );
+
+    this.updateTerrainEffects();
+  }
+
+  /**
+   * Check current tile for terrain effects and update speed modifier
+   */
+  protected updateTerrainEffects(): void {
+    if (!this.scene.terrainLayer) {
+      this.speedModifier = 1.0;
+      return;
+    }
+
+    const tile = this.scene.terrainLayer.getTileAtWorldXY(this.x, this.y);
+
+    if (tile && TERRAIN_TILES.SLOWDOWN.includes(tile.index)) {
+      this.speedModifier = SLOWDOWN_MULTIPLIER;
+    } else {
+      this.speedModifier = 1.0;
+    }
   }
 
   destroy(fromScene?: boolean): void {

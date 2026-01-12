@@ -3,16 +3,15 @@ import {
   GameStats,
   GameStatsResponse,
   GetPlayerSaveApiResponse,
+  JoinMultiplayerApiResponse,
   PlayerSaveApiResponse,
   SavePlayerSaveApiResponse,
   UserCredentials,
   UserResponse,
+  ValidateSessionApiResponse,
 } from "src/types/index.types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-if (!BASE_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL environment variable is not set");
-}
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost";
 
 class ApiService {
   private baseUrl = BASE_URL;
@@ -125,6 +124,95 @@ class ApiService {
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to save.");
+      }
+
+      return result;
+    } catch (error: unknown) {
+      return this.handleError(error);
+    }
+  }
+
+  async joinMultiplayer(guestId?: string): Promise<JoinMultiplayerApiResponse> {
+    try {
+      const response = await fetch(this.baseUrl + "/api/join-multiplayer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: guestId ? JSON.stringify({ guestId }) : undefined,
+      });
+
+      const result: JoinMultiplayerApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error);
+      }
+
+      return result;
+    } catch (error: unknown) {
+      return this.handleError(error);
+    }
+  }
+
+  async validateSession(): Promise<ValidateSessionApiResponse> {
+    try {
+      const response = await fetch(this.baseUrl + "/api/validate-session", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      const result: ValidateSessionApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Session validation failed.");
+      }
+
+      return result;
+    } catch (error: unknown) {
+      return this.handleError(error);
+    }
+  }
+
+  async getPlayerSaves(): Promise<PlayerSaveApiResponse> {
+    try {
+      const response = await fetch(this.baseUrl + "/api/player-saves", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      const result: PlayerSaveApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to get player saves.");
+      }
+
+      return result;
+    } catch (error: unknown) {
+      return this.handleError(error);
+    }
+  }
+
+  async logout(): Promise<ApiResponse<{ message: string }>> {
+    try {
+      const response = await fetch(this.baseUrl + "/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      const result: ApiResponse<{ message: string }> = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to logout.");
       }
 
       return result;

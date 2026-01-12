@@ -27,6 +27,12 @@
       ],
       "@contexts/*": [
         "src/contexts/*"
+      ],
+      "@utils/*": [
+        "src/utils/*"
+      ],
+      "@common/*": [
+        "../common/*"
       ]
     },
     "types": [

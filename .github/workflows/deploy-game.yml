@@ -1,0 +1,30 @@
+name: deploy-ww-game
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'cmd/ww-game/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+
+jobs:
+  deploy-ww-game:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !contains(github.event.head_commit.message, 'ww-ui/') &&
+        !contains(github.event.head_commit.message, 'from sonastea/master')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trigger Coolify Deployment for Game
+        run: |
+          curl --request GET "${{ secrets.COOLIFY_WW_GAME_WEBHOOK }}" --header "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"

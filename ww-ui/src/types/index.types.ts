@@ -26,7 +26,7 @@ export interface UserResponse {
 }
 
 export interface GameStatsResponse {
-  id: number;
+  game_id: number;
   username: string;
   user_id: number;
   team_deaths: number;
@@ -63,6 +63,17 @@ export interface PlayerSaveResponse extends PlayerSaveGameDetails {
   updated_at: string;
 }
 
+export interface JoinMultiplayerResponse {
+  token: string;
+  isGuest: boolean;
+  guestId?: string;
+}
+
+export interface UserInfo {
+  id: number;
+  username: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -72,3 +83,5 @@ export interface ApiResponse<T> {
 export type GetPlayerSaveApiResponse = ApiResponse<PlayerSaveResponse>;
 export type SavePlayerSaveApiResponse = GetPlayerSaveApiResponse;
 export type PlayerSaveApiResponse = ApiResponse<PlayerSaveResponse[]>;
+export type JoinMultiplayerApiResponse = ApiResponse<JoinMultiplayerResponse>;
+export type ValidateSessionApiResponse = ApiResponse<UserInfo>;

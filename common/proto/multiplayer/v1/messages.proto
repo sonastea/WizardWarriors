@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package multiplayer.v1;
+
+import "multiplayer/v1/common.proto";
+import "multiplayer/v1/player.proto";
+
+// The wrapper for all incoming/outgoing WebSocket messages
+message GameMessage {
+  GameMessageType type = 1;
+
+  oneof payload {
+    ChatMessage chat_message        = 2;
+    PlayerEvent player_event        = 3;
+    GameState   game_state          = 4;
+    Announcement chat_announcement  = 5;
+    LobbyState  lobby_state         = 6;
+  }
+}
+
+// Discriminator for GameMessage
+enum GameMessageType {
+  GAME_MESSAGE_TYPE_UNSPECIFIED  = 0;
+  GAME_MESSAGE_TYPE_CHAT_MESSAGE = 1;
+  GAME_MESSAGE_TYPE_PLAYER_EVENT = 2;
+  GAME_MESSAGE_TYPE_GAME_STATE   = 3;
+  GAME_MESSAGE_TYPE_ANNOUNCEMENT = 4;
+  GAME_MESSAGE_TYPE_LOBBY_STATE  = 5;
+}
+
+// Chat from a player
+message ChatMessage {
+  ID sender_id = 1;
+  string sender_name = 2;
+  string text  = 3;
+  int64 sent_at_unix = 4;
+}
+
+// Server announcements (join/leave/system messages)
+message Announcement {
+  string text = 1;
+  int64 sent_at_unix = 2;
+}
+
+// Periodic snapshot of the entire game state (for syncing position drift)
+message GameState {
+  repeated PlayerState players = 1;
+  repeated ProjectileState projectiles = 2;
+}
+
+// Player details inside a GameState update
+message PlayerState {
+  ID player_id     = 1;
+  Vector2 position = 2;
+  bool is_frozen   = 3;  // Whether player is currently frozen/stunned
+  float frozen_until = 4; // Server timestamp when freeze ends (for client-side prediction)
+}
+
+// Projectile state for syncing across clients
+message ProjectileState {
+  string projectile_id = 1;
+  ProjectileType type = 2;
+  Vector2 position = 3;
+  Vector2 target = 4;      // Target position the projectile is heading toward
+  ID owner_id = 5;         // Player who fired the projectile
+  bool active = 6;         // Whether projectile is still in flight
+}
+
+// Types of projectiles
+enum ProjectileType {
+  PROJECTILE_TYPE_UNSPECIFIED = 0;
+  PROJECTILE_TYPE_FIREBALL = 1;
+  PROJECTILE_TYPE_FREEZE_POTION = 2;
+}
+
+// Lobby state showing connected users and in-game players
+message LobbyState {
+  repeated LobbyUser lobby_users = 1;  // All connected users (in lobby, not yet in game)
+  repeated LobbyUser game_users  = 2;  // Users who have joined the game (readied up)
+}
+
+// User info for lobby display
+message LobbyUser {
+  ID user_id   = 1;
+  string name  = 2;
+  bool is_ready = 3;
+}

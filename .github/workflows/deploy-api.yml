@@ -1,13 +1,19 @@
-name: Deploy ww-srv
+name: deploy-ww-api
 
 on:
   push:
     branches:
       - master
+    paths:
+      - 'cmd/ww-srv/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 
 jobs:
-  deploy-ww-srv:
+  deploy-ww-api:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (
@@ -19,6 +25,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Trigger Coolify Deployment for Backend
+      - name: Trigger Coolify Deployment for API
         run: |
-          curl --request GET "${{ secrets.COOLIFY_WW_SRV_WEBHOOK }}" --header "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+          curl --request GET "${{ secrets.COOLIFY_WW_API_WEBHOOK }}" --header "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"

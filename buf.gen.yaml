@@ -1,0 +1,17 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/sonastea/WizardWarriors/common/gen
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: common/gen
+    opt: paths=source_relative
+  - remote: buf.build/connectrpc/go
+    out: common/gen
+    opt: paths=source_relative
+  - remote: buf.build/bufbuild/es:v2.10.2
+    out: common/gen
+inputs:
+  - directory: common/proto

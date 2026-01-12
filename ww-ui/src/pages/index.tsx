@@ -1,37 +1,31 @@
 import { NextPage } from "next/types";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 /* import { MessageType } from "src/rpc/api/proto/ipc_pb"; */
 import useApiService from "@hooks/useApiService";
+import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import Leaderboard from "src/components/Leaderboard";
 import PlayerForm from "src/components/PlayerForm";
-import { GameStatsResponse } from "src/types/index.types";
 import styles from "../styles/index.module.css";
 
 const Home: NextPage = () => {
   const [playable, setPlayable] = useState<boolean>();
-  const [leaderboardData, setLeaderboardData] = useState<
-    GameStatsResponse[] | null
-  >(null);
-
   const apiService = useApiService();
-
   const PhaserGame = lazy(() => import("../game/app"));
 
-  useEffect(() => {
-    if (!apiService) return;
-
-    const fetchLeaderboard = async () => {
+  const { data: leaderboardData } = useQuery({
+    queryKey: ["leaderboard"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
       const res = await apiService.getLeaderboard();
       if (res.success && res.data) {
-        setTimeout(() => {
-          setLeaderboardData(res.data || null);
-        }, 500);
+        return res.data;
       }
-    };
-
-    fetchLeaderboard();
-  }, [apiService]);
+      throw new Error("Failed to fetch leaderboard");
+    },
+    enabled: !!apiService,
+    refetchInterval: 3000000,
+  });
 
   return (
     <>
@@ -44,6 +38,7 @@ const Home: NextPage = () => {
                 alt="Spinning indicator"
                 width={64}
                 height={64}
+                loading="eager"
               />
             </div>
           }
@@ -53,7 +48,7 @@ const Home: NextPage = () => {
       ) : (
         <div className={styles.container}>
           <PlayerForm setPlayable={setPlayable} />
-          <Leaderboard data={leaderboardData} />
+          <Leaderboard data={leaderboardData || null} />
         </div>
       )}
     </>

@@ -18,7 +18,7 @@ export default class Enemy extends Entity {
 
     this.level = 1;
     this.health = 2;
-    this.speed = 75;
+    this.baseSpeed = 75;
     this.attack = 5;
 
     this.scene = scene;

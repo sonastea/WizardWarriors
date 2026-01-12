@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package multiplayer.v1;
+
+import "multiplayer/v1/common.proto";
+
+// Types of player-related events
+enum PlayerEventType {
+  PLAYER_EVENT_TYPE_UNSPECIFIED = 0;
+  PLAYER_EVENT_TYPE_JOIN        = 1;
+  PLAYER_EVENT_TYPE_LEAVE       = 2;
+  PLAYER_EVENT_TYPE_MOVE        = 3; // Deprecated: server ignores
+  PLAYER_EVENT_TYPE_READ        = 4; // e.g., "ack" a chat message
+  PLAYER_EVENT_TYPE_READY       = 5; // Player is ready to start
+  PLAYER_EVENT_TYPE_INPUT       = 6; // Player input change event
+  PLAYER_EVENT_TYPE_ACTION      = 7; // Player action (fire, ability, etc.)
+}
+
+message PlayerEvent {
+  PlayerEventType type = 1;
+
+  // The player this refers to
+  ID player_id = 2;
+
+  // Optional payload depending on event type
+  Vector2 position = 3;        // Used for JOIN (server ignores, generates own)
+  PlayerInput input = 4;       // Deprecated: use input_action instead
+  InputAction input_action = 5; // Used for INPUT type - which input changed
+  GameAction game_action = 6;   // Used for ACTION type - fire, ability, etc.
+}
+
+// Specific input that changed (event-based, not full state)
+message InputAction {
+  InputType input = 1;
+  bool pressed = 2; // true = key down, false = key up
+}
+
+// Types of inputs the player can change
+enum InputType {
+  INPUT_TYPE_UNSPECIFIED = 0;
+  INPUT_TYPE_MOVE_UP     = 1;
+  INPUT_TYPE_MOVE_DOWN   = 2;
+  INPUT_TYPE_MOVE_LEFT   = 3;
+  INPUT_TYPE_MOVE_RIGHT  = 4;
+}
+
+// Game actions (fire, abilities, etc.)
+message GameAction {
+  ActionType action = 1;
+  Vector2 target = 2; // Optional target position (e.g., for aiming)
+}
+
+enum ActionType {
+  ACTION_TYPE_UNSPECIFIED   = 0;
+  ACTION_TYPE_THROW_POTION  = 1;
+  ACTION_TYPE_INTERACT      = 2;
+}
+
+// Deprecated: Full input state - prefer InputAction for efficiency
+message PlayerInput {
+  bool move_up = 1;
+  bool move_down = 2;
+  bool move_left = 3;
+  bool move_right = 4;
+}

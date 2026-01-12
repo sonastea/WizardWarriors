@@ -1,6 +1,9 @@
 import useApiService from "@hooks/useApiService";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { logger } from "@utils/logger";
 import { useAtom } from "jotai";
-import React, { Dispatch, SetStateAction, useState } from "react";
+import { useRouter } from "next/router";
+import React, { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { gameStatsAtom, setGameSaved } from "src/state";
 import { PlayerSaveResponse } from "src/types/index.types";
 import styles from "./PlayerForm.module.css";
@@ -19,6 +22,7 @@ const PlayerForm = ({
 }: {
   setPlayable: Dispatch<SetStateAction<boolean | undefined>>;
 }) => {
+  const router = useRouter();
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -33,9 +37,12 @@ const PlayerForm = ({
   const apiService = useApiService();
   const [_gameStats, setGameStats] = useAtom(gameStatsAtom);
 
-  const login = async (e: React.MouseEvent) => {
-    deleteCookie(e, "ww-userId");
-    await apiService?.loginUser({ username, password }).then((res) => {
+  const loginMutation = useMutation({
+    mutationFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.loginUser({ username, password });
+    },
+    onSuccess: (res) => {
       if (res.success) {
         if (!res.data) handlePlayGame();
         setSaves(res.data);
@@ -47,12 +54,18 @@ const PlayerForm = ({
       } else {
         setError(res.error || "Error logging in.");
       }
-    });
-  };
+    },
+    onError: () => {
+      setError("Error logging in.");
+    },
+  });
 
-  const register = async (e: React.MouseEvent) => {
-    deleteCookie(e, "ww-userId");
-    await apiService?.registerUser({ username, password }).then((res) => {
+  const registerMutation = useMutation({
+    mutationFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.registerUser({ username, password });
+    },
+    onSuccess: (res) => {
       if (res.success) {
         setPlayable(true);
         setGameStats((prev) => ({
@@ -63,12 +76,100 @@ const PlayerForm = ({
       } else {
         setError(res.error || "Error registering.");
       }
-    });
+    },
+    onError: () => {
+      setError("Error registering.");
+    },
+  });
+
+  const joinMultiplayerQuery = useQuery({
+    queryKey: ["multiplayer"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.joinMultiplayer();
+    },
+    enabled: false,
+  });
+
+  const sessionValidationQuery = useQuery({
+    queryKey: ["session"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.validateSession();
+    },
+    enabled: !!apiService,
+    retry: false,
+  });
+
+  useEffect(() => {
+    const handleMultiplayerJoin = async () => {
+      if (
+        joinMultiplayerQuery.isSuccess &&
+        joinMultiplayerQuery.data?.data?.token
+      ) {
+        const token = joinMultiplayerQuery.data.data.token;
+
+        try {
+          sessionStorage.setItem("token", token);
+          router.push("/multiplayer");
+        } catch (err) {
+          logger.error("Failed to connect to multiplayer:", err);
+          setError("Failed to connect to multiplayer server");
+        }
+      }
+    };
+
+    handleMultiplayerJoin();
+  }, [joinMultiplayerQuery.isSuccess, joinMultiplayerQuery.data, router]);
+
+  const playerSavesQuery = useQuery({
+    queryKey: ["playerSaves"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.getPlayerSaves();
+    },
+    enabled: false,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (
+      sessionValidationQuery.isSuccess &&
+      sessionValidationQuery.data?.success
+    ) {
+      const userInfo = sessionValidationQuery.data.data;
+      if (userInfo) {
+        setUsername(userInfo.username);
+        setGameStats((prev) => ({
+          ...prev,
+          user_id: userInfo.id,
+          username: userInfo.username,
+        }));
+        playerSavesQuery.refetch();
+      }
+    }
+  }, [sessionValidationQuery.isSuccess, sessionValidationQuery.data]);
+
+  useEffect(() => {
+    if (playerSavesQuery.isSuccess && playerSavesQuery.data?.success) {
+      const savesData = playerSavesQuery.data.data;
+
+      if (!savesData || savesData.length === 0) {
+        handlePlayGame();
+      } else {
+        setSaves(savesData);
+      }
+    }
+  }, [playerSavesQuery.isSuccess, playerSavesQuery.data]);
+
+  const login = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    loginMutation.mutate();
   };
 
-  const deleteCookie = (event: React.UIEvent, name: string) => {
-    event.preventDefault();
-    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+  const register = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    registerMutation.mutate();
   };
 
   const handleSaveSelection = (save: PlayerSaveResponse) => {
@@ -80,54 +181,107 @@ const PlayerForm = ({
     setGameSaved(false);
   };
 
-  const handlePlayGame = async () => {
-    if (selectedSave) {
-      const save = await apiService?.getPlayerSave(selectedSave.game_id);
+  const loadSaveMutation = useMutation({
+    mutationFn: async (gameId: number) => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.getPlayerSave(gameId);
+    },
+    onSuccess: (save) => {
       if (save?.data?.is_game_over || !save?.data?.game_is_active) {
         alert("This save is no longer playable.");
         return;
       }
-      setGameStats({
-        game_id: save.data.game_id,
-        username,
-        user_id: save.data.user_id,
-        team_deaths: save.data.team_deaths,
-        team_kills: save.data.team_kills,
-        player_level: save.data.player_level,
-        player_kills: save.data.player_kills,
-        player_kills_at_level: save.data.player_kills_at_level,
-        total_allies: save.data.total_allies,
-        total_enemies: save.data.total_enemies,
-        is_game_over: save.data.is_game_over,
-        game_created_at: save.data.game_created_at,
-        game_updated_at: save.data.game_updated_at,
-      });
+      if (save.data) {
+        setGameStats({
+          game_id: save.data.game_id,
+          username,
+          user_id: save.data.user_id,
+          team_deaths: save.data.team_deaths,
+          team_kills: save.data.team_kills,
+          player_level: save.data.player_level,
+          player_kills: save.data.player_kills,
+          player_kills_at_level: save.data.player_kills_at_level,
+          total_allies: save.data.total_allies,
+          total_enemies: save.data.total_enemies,
+          is_game_over: save.data.is_game_over,
+          game_created_at: save.data.game_created_at,
+          game_updated_at: save.data.game_updated_at,
+        });
+      }
+      playGame();
+    },
+    onError: () => {
+      alert("Error loading save.");
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.logout();
+    },
+    onSuccess: () => {
+      setSaves(undefined);
+      setUsername("");
+      setPassword("");
+      setSelectedSave(null);
+      setGameStats((prev) => ({
+        ...prev,
+        user_id: -1,
+        username: "",
+      }));
+    },
+    onError: () => {
+      setError("Error logging out.");
+    },
+  });
+
+  const handlePlayGame = async () => {
+    if (selectedSave) {
+      loadSaveMutation.mutate(selectedSave.game_id);
+    } else {
+      playGame();
     }
-    playGame();
   };
 
   if (saves) {
     return (
-      <div className={styles.savesContainer}>
-        <h2>Player Saves</h2>
-        <div className={styles.savesGrid}>
+      <div
+        className={styles.savesContainer}
+        role="region"
+        aria-labelledby="saves-heading"
+      >
+        <h2 id="saves-heading">Player Saves</h2>
+        <div
+          className={styles.savesGrid}
+          role="listbox"
+          aria-label="Select a saved game"
+        >
           {saves.map((save) => {
             const isDisabled = !save.game_is_active || save.is_game_over;
+            const isSelected = selectedSave?.game_id === save.game_id;
 
             return (
               <div
                 key={save.game_id}
-                className={`${styles.save} ${selectedSave?.game_id === save.game_id ? styles.selectedSave : ""} ${
+                role="option"
+                aria-selected={isSelected}
+                aria-disabled={isDisabled}
+                tabIndex={isDisabled ? -1 : 0}
+                className={`${styles.save} ${isSelected ? styles.selectedSave : ""} ${
                   isDisabled ? styles.disabledSave : ""
                 }`}
                 onClick={() => {
                   if (!isDisabled) handleSaveSelection(save);
                 }}
+                onKeyDown={(e) => {
+                  if (!isDisabled && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    handleSaveSelection(save);
+                  }
+                }}
               >
                 <p>Game ID: {save.game_id}</p>
-                <p>
-                  User ID: <span className={styles.value}>{save.user_id}</span>
-                </p>
                 <p>
                   Total Kills:{" "}
                   <span className={styles["max-level"]}>
@@ -165,12 +319,32 @@ const PlayerForm = ({
         <div className={styles.buttonContainer}>
           <button
             className={`${styles.button} ${styles.grayButton}`}
-            onClick={() => setSaves(undefined)}
+            onClick={() => logoutMutation.mutate()}
+            disabled={loadSaveMutation.isPending || logoutMutation.isPending}
           >
-            Back
+            {logoutMutation.isPending ? "Logging out..." : "Logout"}
           </button>
-          <button className={styles.button} onClick={() => handlePlayGame()}>
-            {selectedSave ? "Continue" : "Start New Game"}
+          <button
+            className={styles.button}
+            onClick={() => handlePlayGame()}
+            disabled={loadSaveMutation.isPending || logoutMutation.isPending}
+          >
+            {loadSaveMutation.isPending
+              ? "Loading..."
+              : selectedSave
+                ? "Continue"
+                : "Start New Game"}
+          </button>
+        </div>
+        <div className={styles.buttonContainer}>
+          <button
+            className={`${styles.button} ${styles.buttonMultiplayer}`}
+            onClick={() => joinMultiplayerQuery.refetch()}
+            disabled={joinMultiplayerQuery.isFetching}
+          >
+            {joinMultiplayerQuery.isFetching
+              ? "Connecting..."
+              : "Play Multiplayer"}
           </button>
         </div>
       </div>
@@ -178,28 +352,44 @@ const PlayerForm = ({
   }
 
   return (
-    <form className={styles.form}>
-      <div className={styles.errorContainer}>
-        {error && <p className={styles.error}>{error}</p>}
+    <form className={styles.form} aria-label="Player login form">
+      <div className={styles.errorContainer} aria-live="polite" role="alert">
+        {error && (
+          <p id="form-error" className={styles.error}>
+            {error}
+          </p>
+        )}
       </div>
+      <label htmlFor="username" className="visually-hidden">
+        Player name
+      </label>
       <input
+        id="username"
         name="username"
         autoComplete="username"
         className={`${styles.input} ${error ? styles.inputError : ""}`}
         placeholder="Player name"
         value={username}
+        aria-describedby={error ? "form-error" : undefined}
+        aria-invalid={error ? "true" : undefined}
         onChange={(e) => {
           setUsername(e.target.value);
           if (error) setError("");
         }}
       />
+      <label htmlFor="password" className="visually-hidden">
+        Password
+      </label>
       <input
+        id="password"
         name="password"
-        autoComplete="false"
+        autoComplete="current-password"
         className={`${styles.input} ${error ? styles.inputError : ""}`}
         placeholder="Password"
         type="password"
         value={password}
+        aria-describedby={error ? "form-error" : undefined}
+        aria-invalid={error ? "true" : undefined}
         onChange={(e) => {
           setPassword(e.target.value);
           if (error) setError("");
@@ -207,20 +397,33 @@ const PlayerForm = ({
       />
       <div className={styles.buttonContainer}>
         <button
+          type="submit"
           className={styles.button}
-          aria-label="Login"
-          disabled={disableButton}
+          disabled={disableButton || loginMutation.isPending}
           onClick={login}
         >
-          Login
+          {loginMutation.isPending ? "Logging in..." : "Login"}
         </button>
         <button
+          type="button"
           className={`${styles.button} ${styles.grayButton}`}
-          aria-label="Register"
-          disabled={disableButton}
+          disabled={disableButton || registerMutation.isPending}
           onClick={register}
         >
-          Register
+          {registerMutation.isPending ? "Registering..." : "Register"}
+        </button>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonMultiplayer}`}
+          onClick={(e) => {
+            e.preventDefault();
+            joinMultiplayerQuery.refetch();
+          }}
+          disabled={joinMultiplayerQuery.isFetching}
+        >
+          {joinMultiplayerQuery.isFetching
+            ? "Connecting..."
+            : "Play Multiplayer"}
         </button>
       </div>
     </form>

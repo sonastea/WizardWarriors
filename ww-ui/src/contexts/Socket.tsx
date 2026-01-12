@@ -1,58 +1,186 @@
+import { logger } from "@utils/logger";
 import {
   createContext,
   ReactElement,
   ReactNode,
+  useCallback,
   useContext,
-  useEffect,
-  useMemo,
+  useRef,
+  useState,
 } from "react";
 
 interface ISocketContext {
   ws: WebSocket | null;
+  isConnected: boolean;
+  isConnecting: boolean;
+  error: string | null;
+  connect: (token: string) => Promise<void>;
+  disconnect: () => void;
+  reconnect: () => Promise<void>;
+  reconnectWithToken: (token: string) => Promise<void>;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
-if (!WS_URL) {
-  throw new Error("NEXT_PUBLIC_WS_URL environment variable is not set");
-}
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost/game";
 
 const SocketContext = createContext<ISocketContext>({} as ISocketContext);
 
-// GAME SOCKET BEING INSTANTIATED TWICE
 export function SocketProvider({
   children,
 }: {
   children: ReactNode;
 }): ReactElement | null {
-  const ws = useMemo(
-    () => (typeof window !== "undefined" ? new WebSocket(`${WS_URL}`) : null),
-    []
-  );
+  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  const disconnect = useCallback(() => {
     if (ws) {
-      ws.binaryType = "arraybuffer";
-
-      ws.onclose = () => {
-        if (ws.readyState === 1) {
-          console.log("socket closed");
-        }
-      };
-
-      ws.onerror = () => {
-        console.log("Websocket connection error");
-      };
-
-      ws.onopen = () => console.log("Connected to game ws server");
+      ws.close();
+      setWs(null);
+      setIsConnected(false);
+      setIsConnecting(false);
+      tokenRef.current = null;
     }
-
-    return () => {
-      ws?.close();
-    };
   }, [ws]);
 
+  const connect = useCallback(
+    async (token: string) => {
+      if (isConnecting || isConnected) {
+        logger.warn("Already connecting or connected");
+        return;
+      }
+
+      setIsConnecting(true);
+      setError(null);
+      tokenRef.current = token;
+
+      try {
+        const websocket = new WebSocket(`${WS_URL}?token=${token}`);
+        websocket.binaryType = "arraybuffer";
+
+        websocket.onopen = () => {
+          logger.info("Connected to multiplayer game server");
+          setIsConnected(true);
+          setIsConnecting(false);
+          setError(null);
+        };
+
+        websocket.onclose = (event) => {
+          logger.info(
+            "Disconnected from multiplayer server",
+            event.code,
+            event.reason
+          );
+          setIsConnected(false);
+          setIsConnecting(false);
+          setWs(null);
+        };
+
+        websocket.onerror = (event) => {
+          logger.error("WebSocket error:", event);
+          setError("Failed to connect to multiplayer server");
+          setIsConnecting(false);
+          setIsConnected(false);
+        };
+
+        setWs(websocket);
+      } catch (err) {
+        logger.error("Connection error:", err);
+        setError(
+          err instanceof Error ? err.message : "Unknown connection error"
+        );
+        setIsConnecting(false);
+      }
+    },
+    [isConnecting, isConnected]
+  );
+
+  const reconnect = useCallback(async () => {
+    if (!tokenRef.current) {
+      setError("No token available for reconnection");
+      return;
+    }
+
+    disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await connect(tokenRef.current);
+  }, [connect, disconnect]);
+
+  const reconnectWithToken = useCallback(
+    async (newToken: string) => {
+      // Close existing connection if any
+      if (ws) {
+        ws.close();
+        setWs(null);
+      }
+
+      // Wait for cleanup
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Reset state and connect with new token
+      setIsConnected(false);
+      setIsConnecting(true);
+      setError(null);
+      tokenRef.current = newToken;
+
+      try {
+        const websocket = new WebSocket(`${WS_URL}?token=${newToken}`);
+        websocket.binaryType = "arraybuffer";
+
+        websocket.onopen = () => {
+          logger.info("Reconnected to multiplayer game server");
+          setIsConnected(true);
+          setIsConnecting(false);
+          setError(null);
+        };
+
+        websocket.onclose = (event) => {
+          logger.info(
+            "Disconnected from multiplayer server",
+            event.code,
+            event.reason
+          );
+          setIsConnected(false);
+          setIsConnecting(false);
+          setWs(null);
+        };
+
+        websocket.onerror = (event) => {
+          logger.error("WebSocket error:", event);
+          setError("Failed to connect to multiplayer server");
+          setIsConnecting(false);
+          setIsConnected(false);
+        };
+
+        setWs(websocket);
+      } catch (err) {
+        logger.error("Reconnection error:", err);
+        setError(
+          err instanceof Error ? err.message : "Unknown connection error"
+        );
+        setIsConnecting(false);
+      }
+    },
+    [ws]
+  );
+
   return (
-    <SocketContext.Provider value={{ ws }}>{children}</SocketContext.Provider>
+    <SocketContext.Provider
+      value={{
+        ws,
+        isConnected,
+        isConnecting,
+        error,
+        connect,
+        disconnect,
+        reconnect,
+        reconnectWithToken,
+      }}
+    >
+      {children}
+    </SocketContext.Provider>
   );
 }
 
