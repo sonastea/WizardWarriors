@@ -36,7 +36,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-nextjs-${{ hashFiles('ww-ui/bun.lock') }}-
 
-      - name: Install Dependencies
+      - name: Install Dependencies (root)
+        run: bun install
+
+      - name: Install Dependencies (ww-ui)
         run: |
           cd ww-ui
           bun install --frozen-lockfile
@@ -73,7 +76,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-nextjs-${{ hashFiles('ww-ui/bun.lock') }}-
 
-      - name: Install Dependencies
+      - name: Install Dependencies (root)
+        run: bun install
+
+      - name: Install Dependencies (ww-ui)
         run: |
           cd ww-ui
           bun install --frozen-lockfile

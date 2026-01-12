@@ -3,6 +3,8 @@ import {
   ChatMessageSchema,
   GameMessageSchema,
   GameMessageType,
+  type LobbyUser,
+  type GameMessage,
 } from "@common/gen/multiplayer/v1/messages_pb";
 import {
   ActionType,
@@ -175,7 +177,7 @@ const MultiplayerPhaserGame = ({
     const handleMessage = (event: MessageEvent) => {
       try {
         const bytes = new Uint8Array(event.data);
-        const msg = fromBinary(GameMessageSchema, bytes);
+        const msg = fromBinary(GameMessageSchema, bytes) as GameMessage;
 
         switch (msg.type) {
           case GameMessageType.CHAT_MESSAGE:
@@ -241,14 +243,14 @@ const MultiplayerPhaserGame = ({
             if (msg.payload.case === "lobbyState") {
               const lobbyState = msg.payload.value;
               setLobbyUsers(
-                lobbyState.lobbyUsers.map((u) => ({
+                lobbyState.lobbyUsers.map((u: LobbyUser) => ({
                   odId: u.userId?.value || "",
                   name: u.name || u.userId?.value || "Unknown",
                   isReady: u.isReady,
                 }))
               );
               setGameUsers(
-                lobbyState.gameUsers.map((u) => ({
+                lobbyState.gameUsers.map((u: LobbyUser) => ({
                   odId: u.userId?.value || "",
                   name: u.name || u.userId?.value || "Unknown",
                   isReady: u.isReady,
