@@ -474,12 +474,8 @@ const MultiplayerPhaserGame = ({
       {!isReady && (
         <div className={styles.lobbyOverlay}>
           {/* Corner accents */}
-          <span
-            className={`${styles.cornerAccent} ${styles.cornerTopLeft}`}
-          />
-          <span
-            className={`${styles.cornerAccent} ${styles.cornerTopRight}`}
-          />
+          <span className={`${styles.cornerAccent} ${styles.cornerTopLeft}`} />
+          <span className={`${styles.cornerAccent} ${styles.cornerTopRight}`} />
           <span
             className={`${styles.cornerAccent} ${styles.cornerBottomLeft}`}
           />
