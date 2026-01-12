@@ -11,10 +11,7 @@ import {
   ValidateSessionApiResponse,
 } from "src/types/index.types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-if (!BASE_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL environment variable is not set");
-}
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost";
 
 class ApiService {
   private baseUrl = BASE_URL;

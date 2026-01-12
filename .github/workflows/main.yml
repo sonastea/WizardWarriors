@@ -80,8 +80,8 @@ jobs:
 
       - name: Build Project
         env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://ww.api.localhost' }}
-          NEXT_PUBLIC_WS_URL: ${{ secrets.NEXT_PUBLIC_WS_URL || 'ws://ww.api.localhost/game' }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost' }}
+          NEXT_PUBLIC_WS_URL: ${{ secrets.NEXT_PUBLIC_WS_URL || 'ws://localhost/game' }}
         run: |
           cd ww-ui
           bun run build
