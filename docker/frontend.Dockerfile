@@ -32,6 +32,10 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-$NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-$NEXT_PUBLIC_WS_URL}
 ENV NODE_ENV=production
 
+RUN apt-get update \
+  && apt-get install -y curl wget \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /opt/ww-ui/.next/standalone/ standalone
 COPY --from=builder /opt/ww-ui/.next/static standalone/ww-ui/.next/static
 COPY --from=builder /opt/ww-ui/public standalone/ww-ui/public
