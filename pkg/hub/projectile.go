@@ -13,7 +13,7 @@ import (
 const (
 	FreezePotionSpeed   float32 = 200 // pixels per second
 	FreezePotionRadius  float32 = 64  // splash radius
-	FreezeDuration      float64 = 5.0 // seconds
+	FreezeDuration      float64 = 3.5 // seconds
 	MaxProjectiles      int     = 100
 	ProjectileHitRadius float32 = 20 // collision radius for hitting players
 )
@@ -167,10 +167,20 @@ func (pm *ProjectileManager) detonateProjectile(p *Projectile, players map[strin
 // freezePlayersInRadius freezes all players within radius
 func (pm *ProjectileManager) freezePlayersInRadius(x, y, radius float32, excludeOwner string, players map[string]*PlayerState) {
 	radiusSq := radius * radius
+	now := time.Now()
 
 	for _, player := range players {
 		if player.UserID == excludeOwner {
 			continue // Don't freeze self
+		}
+
+		if player.IsFrozen {
+			continue
+		}
+
+		if now.Before(player.FreezeImmunity) {
+			logger.Debug("Player %s has freeze immunity, skipping", player.UserID)
+			continue
 		}
 
 		dx := x - player.X
@@ -179,7 +189,7 @@ func (pm *ProjectileManager) freezePlayersInRadius(x, y, radius float32, exclude
 
 		if distSq <= radiusSq {
 			player.IsFrozen = true
-			player.FrozenUntil = time.Now().Add(time.Duration(FreezeDuration * float64(time.Second)))
+			player.FrozenUntil = now.Add(time.Duration(FreezeDuration * float64(time.Second)))
 
 			logger.Info("Player %s frozen by freeze potion", player.UserID)
 		}

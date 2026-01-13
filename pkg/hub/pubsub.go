@@ -200,6 +200,11 @@ func (hub *Hub) handleGameAction(playerID string, action *multiplayerv1.GameActi
 		return
 	}
 
+	if hub.gameStateManager.IsPlayerFrozen(playerID) {
+		logger.Debug("Player %s tried to perform action while frozen, ignoring", playerID)
+		return
+	}
+
 	switch action.Action {
 	case multiplayerv1.ActionType_ACTION_TYPE_THROW_POTION:
 		hub.gameStateManager.SpawnFreezePotion(

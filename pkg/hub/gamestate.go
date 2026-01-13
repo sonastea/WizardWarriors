@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	PlayerRadius  float32 = 16
-	PlayerSpeed   float32 = 200 // pixels per second
-	SlowdownSpeed float32 = 80  // speed in slowdown zones
+	PlayerRadius       float32 = 16
+	PlayerSpeed        float32 = 150
+	SlowdownSpeed      float32 = 60
+	FreezeImmunityTime float64 = 3.0
 )
 
 type PlayerState struct {
@@ -26,8 +27,9 @@ type PlayerState struct {
 	MoveLeft  bool
 	MoveRight bool
 
-	IsFrozen    bool
-	FrozenUntil time.Time
+	IsFrozen       bool
+	FrozenUntil    time.Time
+	FreezeImmunity time.Time
 }
 
 type GameStateManager struct {
@@ -131,8 +133,20 @@ func (gsm *GameStateManager) updateFreezeStates() {
 	for _, player := range gsm.players {
 		if player.IsFrozen && now.After(player.FrozenUntil) {
 			player.IsFrozen = false
+			player.FreezeImmunity = now.Add(time.Duration(FreezeImmunityTime * float64(time.Second)))
 		}
 	}
+}
+
+// IsPlayerFrozen returns whether a player is currently frozen
+func (gsm *GameStateManager) IsPlayerFrozen(userID string) bool {
+	gsm.mu.RLock()
+	defer gsm.mu.RUnlock()
+
+	if player, exists := gsm.players[userID]; exists {
+		return player.IsFrozen
+	}
+	return false
 }
 
 // SpawnFreezePotion spawns a freeze potion projectile from the given player
@@ -142,6 +156,10 @@ func (gsm *GameStateManager) SpawnFreezePotion(ownerID string, targetX, targetY 
 	gsm.mu.RUnlock()
 
 	if !exists {
+		return ""
+	}
+
+	if player.IsFrozen {
 		return ""
 	}
 

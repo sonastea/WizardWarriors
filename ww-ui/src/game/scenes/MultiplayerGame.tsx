@@ -3,6 +3,7 @@ import { logger } from "@utils/logger";
 import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
+import { DebuffDisplay } from "../ui/DebuffDisplay";
 import type {
   GameState,
   ProjectileState,
@@ -10,8 +11,8 @@ import type {
 import { ProjectileType } from "@common/gen/multiplayer/v1/messages_pb";
 
 const PLAYER_SIZE = 16;
-const PLAYER_SPEED = 200;
-const SLOWDOWN_SPEED = 80;
+const PLAYER_SPEED = 150;
+const SLOWDOWN_SPEED = 60;
 
 const COLLISION_TILES = {
   obstacles: [55, 56, 57, 58, 59, 60, 61, 62, 63],
@@ -51,6 +52,7 @@ export default class MultiplayerGameScene extends Scene {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private localPlayerId: string | null = null;
   private minimap: Minimap | null = null;
+  private debuffDisplay: DebuffDisplay | null = null;
   private freezeParticleTexture: string = "freeze-particle";
 
   private collisionLayer: Tilemaps.TilemapLayer | null = null;
@@ -218,6 +220,9 @@ export default class MultiplayerGameScene extends Scene {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) {
+        if (this.localPlayer?.isFrozen) {
+          return;
+        }
         const worldPoint = this.cameras.main.getWorldPoint(
           pointer.x,
           pointer.y
@@ -245,6 +250,8 @@ export default class MultiplayerGameScene extends Scene {
     if (this.collisionLayer && this.elevationLayer) {
       this.minimap.renderLayers(this.collisionLayer, this.elevationLayer);
     }
+
+    this.debuffDisplay = new DebuffDisplay(this);
 
     EventBus?.emit("current-scene-ready", this);
   }
@@ -566,6 +573,10 @@ export default class MultiplayerGameScene extends Scene {
 
     playerData.isFrozen = frozen;
 
+    if (playerData === this.localPlayer && this.debuffDisplay) {
+      this.debuffDisplay.setDebuff("frozen", frozen);
+    }
+
     if (frozen) {
       playerData.sprite.setTint(0x88ccff);
 
@@ -699,5 +710,8 @@ export default class MultiplayerGameScene extends Scene {
 
     this.minimap?.destroy();
     this.minimap = null;
+
+    this.debuffDisplay?.destroy();
+    this.debuffDisplay = null;
   }
 }
