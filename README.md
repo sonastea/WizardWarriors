@@ -50,12 +50,13 @@ Follow this guide to set up the project locally using Docker Compose and explore
 
 #### **Available Services**
 
-| Service      | Description                                 | URL                                  |
-|--------------|---------------------------------------------|--------------------------------------|
-| **Traefik**  | Reverse proxy and load balancer            | [http://localhost:8080](http://localhost:8080) (dashboard) |
-| **Database** | PostgreSQL database for game data          | `localhost:5432` (PostgreSQL client) |
-| **Backend**  | Game backend API server                   | [http://localhost/api](http://localhost/api) |
-| **Frontend** | Game user interface                       | [http://localhost](http://localhost) |
+| Service         | Description                                 | URL                                  |
+|-----------------|---------------------------------------------|--------------------------------------|
+| **Traefik**     | Reverse proxy and load balancer            | [http://localhost:8080](http://localhost:8080) (dashboard) |
+| **Database**    | PostgreSQL database for game data          | `localhost:5432` (PostgreSQL client) |
+| **API Server**  | Backend API server (port 8080)             | [http://localhost/api](http://localhost/api) |
+| **Game Server** | WebSocket game server (port 8085)          | [ws://localhost/game](ws://localhost/game) |
+| **Frontend**    | Game user interface                        | [http://localhost](http://localhost) |
 
 ---
 
@@ -83,11 +84,15 @@ You can update the following environment variables in `docker-compose.yml`:
   - `NEXT_PUBLIC_API_URL`: URL for the backend API (default: `http://localhost`)
   - `NEXT_PUBLIC_WS_URL`: URL for the WebSocket server (default: `ws://localhost/game`)
 
-- **Backend:**
+- **API Server:**
   - `DATABASE_URL`: Connection string for PostgreSQL
   - `REDIS_URL`: Connection string for Redis
 
-**Note:** Both frontend and backend are served from the same domain (`localhost`) to ensure cookies work properly. Traefik routes requests to `/api`, `/game`, and `/healthcheck` to the backend, while all other requests go to the frontend.
+- **Game Server:**
+  - Runs on port 8085 internally
+  - Handles WebSocket connections for real-time gameplay
+
+**Note:** Both frontend and backend services are served from the same domain (`localhost`) to ensure cookies work properly. Traefik routes requests to `/api` and `/healthcheck` to the API server, `/game` to the game server, while all other requests go to the frontend.
 
 ---
 

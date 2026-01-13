@@ -10,7 +10,7 @@ ENV REDIS_URL=$REDIS_URL
 RUN mkdir /opt/ww
 WORKDIR /opt/ww
 
-RUN apk add --no-cache git=2.49.1-r0 build-base=0.5-r3 && \
+RUN apk add --no-cache git=2.52.0-r0 build-base=0.5-r3 && \
   go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 COPY go.mod .
@@ -23,14 +23,14 @@ WORKDIR /opt/ww/cmd/ww-srv
 
 RUN go build -o ww-srv
 
-FROM alpine:3.22
+FROM alpine:3.23
 
 ARG DATABASE_URL
 ARG REDIS_URL
 ENV DATABASE_URL=$DATABASE_URL
 ENV REDIS_URL=$REDIS_URL
 
-RUN mkdir /opt/ww && apk add --no-cache curl=8.14.1-r2
+RUN mkdir /opt/ww && apk add --no-cache curl=8.17.0-r1
 WORKDIR /opt/ww
 
 COPY --from=builder /go/bin/goose /usr/local/bin/goose

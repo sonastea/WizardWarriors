@@ -1,5 +1,6 @@
 services:
   traefik:
+    container_name: ww-traefik
     image: "traefik:v3.6.2"
     command:
       - "--api.insecure=true"
@@ -15,6 +16,7 @@ services:
       - wiznet
 
   db:
+    container_name: ww-db
     image: "postgres:18.1"
     restart: always
     environment:
@@ -25,7 +27,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pg-data-volume:/var/lib/postgresql/data
+      - ww-db-volume:/var/lib/postgresql/18/docker
     depends_on:
       - traefik
     healthcheck:
@@ -37,6 +39,7 @@ services:
       - wiznet
 
   redis:
+    container_name: ww-redis
     image: "redis:8.4"
     restart: always
     ports:
@@ -52,13 +55,14 @@ services:
     networks:
       - wiznet
 
-  server:
+  api:
+    container_name: ww-api
     build:
       context: .
-      dockerfile: docker/server.Dockerfile
+      dockerfile: docker/api.Dockerfile
       args:
         DATABASE_URL: postgresql://postgres:postgres@db/wizardwarriors
-        REDIS_URL: redis://localhost:6379/0
+        REDIS_URL: redis://redis/0
     depends_on:
       db:
         condition: service_healthy
@@ -66,7 +70,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db/wizardwarriors
-      REDIS_URL: redis://localhost:6379/0
+      REDIS_URL: redis://redis/0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthcheck"]
       interval: 5s
@@ -76,13 +80,40 @@ services:
       - wiznet
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.server.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/game`) || PathPrefix(`/healthcheck`))"
-      - "traefik.http.routers.server.service=server-service"
-      - "traefik.http.routers.server.entrypoints=web"
-      - "traefik.http.routers.server.priority=100"
-      - "traefik.http.services.server-service.loadbalancer.server.port=8080"
+      - "traefik.http.routers.api.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/healthcheck`))"
+      - "traefik.http.routers.api.service=api-service"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.services.api-service.loadbalancer.server.port=8080"
+
+  game-server:
+    container_name: ww-game-server
+    build:
+      context: .
+      dockerfile: docker/game.Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db/wizardwarriors
+      REDIS_URL: redis://redis/0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - wiznet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.game.rule=Host(`localhost`) && PathPrefix(`/game`)"
+      - "traefik.http.routers.game.service=game-service"
+      - "traefik.http.routers.game.entrypoints=web"
+      - "traefik.http.routers.game.priority=100"
+      - "traefik.http.services.game-service.loadbalancer.server.port=8085"
 
   frontend:
+    container_name: ww-ui
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
@@ -95,7 +126,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      server:
+      api:
+        condition: service_healthy
+      game-server:
         condition: service_healthy
     healthcheck:
       disable: true
@@ -116,5 +149,5 @@ networks:
 volumes:
   redis:
     driver: local
-  pg-data-volume:
+  ww-db-volume:
     external: false

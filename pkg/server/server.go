@@ -50,8 +50,6 @@ func WithApiHandler(apiHandler *handler.ApiHandler) Option {
 		router := s.server.Handler.(*http.ServeMux)
 		api := http.NewServeMux()
 
-		router.HandleFunc("GET /healthcheck", healthcheckHandler)
-
 		api.HandleFunc("GET /leaderboard", apiHandler.GetLeaderboard)
 		api.HandleFunc("GET /validate-session", apiHandler.ValidateSession)
 		api.HandleFunc("GET /player-saves", apiHandler.GetPlayerSaves)
@@ -110,6 +108,9 @@ func NewServer(cfg *config.Config, opts ...Option) (*Server, error) {
 		server:     srv,
 		serverName: "WizardWarriors server",
 	}
+
+	// Register healthcheck endpoint for all servers
+	router.HandleFunc("GET /healthcheck", healthcheckHandler)
 
 	// Apply all options
 	for _, opt := range opts {
