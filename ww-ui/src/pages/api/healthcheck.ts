@@ -46,7 +46,6 @@ export default function handler(
   }
 
   const clientIp = getClientIp(req);
-  console.log(clientIp);
   if (!isLocalhost(clientIp)) {
     const now = Date.now();
     const recentRequests = (rateLimitStore.get(clientIp) ?? []).filter(
