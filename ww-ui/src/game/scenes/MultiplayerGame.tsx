@@ -43,6 +43,7 @@ interface ProjectileData {
   targetX: number;
   targetY: number;
   type: ProjectileType;
+  trailEmitter?: GameObjects.Particles.ParticleEmitter;
 }
 
 export default class MultiplayerGameScene extends Scene {
@@ -54,6 +55,8 @@ export default class MultiplayerGameScene extends Scene {
   private minimap: Minimap | null = null;
   private debuffDisplay: DebuffDisplay | null = null;
   private freezeParticleTexture: string = "freeze-particle";
+  private explosionParticleTexture: string = "explosion-particle";
+  private trailParticleTexture: string = "trail-particle";
 
   private collisionLayer: Tilemaps.TilemapLayer | null = null;
   private elevationLayer: Tilemaps.TilemapLayer | null = null;
@@ -217,6 +220,9 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.on("multiplayer-player-left", this.handlePlayerLeft, this);
 
     this.createFreezeParticleTexture();
+    this.createExplosionParticleTexture();
+    this.createTrailParticleTexture();
+    this.createSnowflakeTexture();
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) {
@@ -563,6 +569,161 @@ export default class MultiplayerGameScene extends Scene {
   }
 
   /**
+   * Generate particle texture for explosion effects - sharp ice shard
+   */
+  private createExplosionParticleTexture(): void {
+    if (this.textures.exists(this.explosionParticleTexture)) {
+      return;
+    }
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Create a sharp elongated ice shard
+    graphics.fillStyle(0xffffff, 1);
+    graphics.beginPath();
+    graphics.moveTo(4, 0); // top point
+    graphics.lineTo(6, 5);
+    graphics.lineTo(4, 16); // bottom point
+    graphics.lineTo(2, 5);
+    graphics.closePath();
+    graphics.fillPath();
+
+    graphics.generateTexture(this.explosionParticleTexture, 8, 16);
+    graphics.destroy();
+  }
+
+  /**
+   * Generate snowflake particle texture for frozen effect
+   */
+  private createSnowflakeTexture(): void {
+    if (this.textures.exists("snowflake-particle")) {
+      return;
+    }
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Draw a simple 6-pointed snowflake
+    const cx = 6;
+    const cy = 6;
+    const len = 5;
+
+    graphics.lineStyle(1, 0xffffff, 1);
+
+    for (let i = 0; i < 6; i++) {
+      const angle = (i * Math.PI) / 3;
+      const endX = cx + Math.cos(angle) * len;
+      const endY = cy + Math.sin(angle) * len;
+      graphics.beginPath();
+      graphics.moveTo(cx, cy);
+      graphics.lineTo(endX, endY);
+      graphics.strokePath();
+    }
+
+    graphics.generateTexture("snowflake-particle", 12, 12);
+    graphics.destroy();
+  }
+
+  /**
+   * Generate particle texture for projectile trail effects
+   */
+  private createTrailParticleTexture(): void {
+    if (this.textures.exists(this.trailParticleTexture)) {
+      return;
+    }
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Create a small bright icy particle for the trail
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(4, 4, 4);
+    graphics.fillStyle(0xf0ffff, 0.9);
+    graphics.fillCircle(4, 4, 2);
+    graphics.generateTexture(this.trailParticleTexture, 8, 8);
+    graphics.destroy();
+  }
+
+  /**
+   * Create a frozen explosion effect - ice shards, snowflakes, and cold mist
+   */
+  private createExplosionEffect(x: number, y: number): void {
+    const shardEmitter = this.add.particles(
+      x,
+      y,
+      this.explosionParticleTexture,
+      {
+        speed: { min: 10, max: 25 },
+        scale: { start: 0.4, end: 0.1 },
+        alpha: { start: 0.9, end: 0 },
+        lifespan: { min: 200, max: 400 },
+        angle: { min: 0, max: 360 },
+        quantity: 4,
+        tint: 0xffffff,
+        rotate: { start: 0, end: 45 },
+        emitting: false,
+      }
+    );
+    shardEmitter.setDepth(16);
+    shardEmitter.explode();
+
+    const snowflakeEmitter = this.add.particles(x, y, "snowflake-particle", {
+      speed: { min: 4, max: 15 },
+      scale: { start: 0.3, end: 0.05 },
+      alpha: { start: 0.7, end: 0 },
+      lifespan: { min: 300, max: 500 },
+      angle: { min: 220, max: 320 },
+      quantity: 3,
+      tint: 0xffffff,
+      rotate: { start: 0, end: 90 },
+      emitting: false,
+    });
+    snowflakeEmitter.setDepth(17);
+    snowflakeEmitter.explode();
+
+    const groundFrostEmitter = this.add.particles(
+      x,
+      y,
+      this.freezeParticleTexture,
+      {
+        speed: { min: 3, max: 7 },
+        scale: { start: 0.15, end: 0.35 },
+        alpha: { start: 0.4, end: 0 },
+        lifespan: { min: 500, max: 900 },
+        angle: { min: 0, max: 360 },
+        quantity: 4,
+        tint: [0xffffff, 0xe8f4ff],
+        emitting: false,
+      }
+    );
+    groundFrostEmitter.setDepth(14);
+    groundFrostEmitter.explode();
+
+    const chillEmitter = this.add.particles(x, y, this.freezeParticleTexture, {
+      speedX: { min: -2, max: 1 },
+      speedY: { min: -5, max: -2 },
+      scale: { start: 0.08, end: 0.3 },
+      alpha: { start: 0.15, end: 0 },
+      lifespan: { min: 1200, max: 2000 },
+      frequency: 800,
+      quantity: 1,
+      tint: 0xffffff,
+      emitting: true,
+    });
+    chillEmitter.setDepth(15);
+
+    // Stop chill after a while, then clean up
+    this.time.delayedCall(3000, () => {
+      chillEmitter.stop();
+    });
+
+    this.time.delayedCall(4000, () => {
+      shardEmitter.destroy();
+      snowflakeEmitter.destroy();
+      groundFrostEmitter.destroy();
+      chillEmitter.destroy();
+    });
+  }
+
+  /**
    * Set frozen state visual for a player
    */
   private setPlayerFrozen(
@@ -643,11 +804,31 @@ export default class MultiplayerGameScene extends Scene {
         sprite.play("potion-idle");
         sprite.chain("potion-flying");
 
+        // Create trail particle emitter that follows the projectile
+        const trailEmitter = this.add.particles(
+          0,
+          0,
+          this.trailParticleTexture,
+          {
+            speed: { min: 5, max: 15 },
+            scale: { start: 0.4, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: { min: 200, max: 350 },
+            frequency: 10,
+            quantity: 1,
+            follow: sprite,
+            tint: [0xffffff, 0xeeffff, 0xccf0ff],
+            blendMode: Phaser.BlendModes.ADD,
+          }
+        );
+        trailEmitter.setDepth(14);
+
         projectileData = {
           sprite,
           targetX: state.target?.x ?? state.position.x,
           targetY: state.target?.y ?? state.position.y,
           type: state.type,
+          trailEmitter,
         };
         this.projectiles.set(state.projectileId, projectileData);
       }
@@ -671,6 +852,17 @@ export default class MultiplayerGameScene extends Scene {
           projectileData.sprite.x = state.position.x;
           projectileData.sprite.y = state.position.y;
           projectileData.sprite.play("potion-explode");
+
+          // Stop and destroy trail emitter
+          if (projectileData.trailEmitter) {
+            projectileData.trailEmitter.stop();
+            projectileData.trailEmitter.destroy();
+            projectileData.trailEmitter = undefined;
+          }
+
+          // Create lively cold explosion effect
+          this.createExplosionEffect(state.position.x, state.position.y);
+
           this.time.delayedCall(50, () => {
             projectileData.sprite.destroy();
             this.projectiles.delete(state.projectileId);
@@ -681,6 +873,10 @@ export default class MultiplayerGameScene extends Scene {
 
     this.projectiles.forEach((data, id) => {
       if (!activeIds.has(id)) {
+        if (data.trailEmitter) {
+          data.trailEmitter.stop();
+          data.trailEmitter.destroy();
+        }
         data.sprite.destroy();
         this.projectiles.delete(id);
       }
@@ -694,6 +890,10 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.removeListener("set-local-player-id");
 
     this.projectiles.forEach((data) => {
+      if (data.trailEmitter) {
+        data.trailEmitter.stop();
+        data.trailEmitter.destroy();
+      }
       data.sprite.destroy();
     });
     this.projectiles.clear();
