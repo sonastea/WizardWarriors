@@ -6,6 +6,7 @@ export default class MultiplayerLobbyScene extends Scene {
   private background: GameObjects.Rectangle | null = null;
   private titleContainer: GameObjects.Container | null = null;
   private titleLetters: GameObjects.Text[] = [];
+  private lobbyMusic: Phaser.Sound.BaseSound | null = null;
 
   constructor() {
     super(CONSTANTS.SCENES.MULTIPLAYER_LOBBY);
@@ -27,10 +28,28 @@ export default class MultiplayerLobbyScene extends Scene {
 
     EventBus.on("multiplayer-game-start", this.handleGameStart, this);
 
+    if (this.cache.audio.exists("lobby-music")) {
+      this.lobbyMusic = this.sound.add("lobby-music", {
+        volume: 0.65,
+        loop: true,
+      });
+
+      if (this.sound.locked) {
+        this.sound.once("unlocked", () => {
+          if (this.lobbyMusic && !this.lobbyMusic.isPlaying) {
+            this.lobbyMusic.play();
+          }
+        });
+      } else {
+        this.lobbyMusic.play();
+      }
+    }
+
     EventBus?.emit("current-scene-ready", this);
   }
 
   handleGameStart() {
+    this.lobbyMusic?.stop();
     this.scene.start(CONSTANTS.SCENES.MULTIPLAYER_GAME);
   }
 
@@ -147,6 +166,8 @@ export default class MultiplayerLobbyScene extends Scene {
   shutdown() {
     this.scale.off("resize", this.resize, this);
     EventBus.removeListener("multiplayer-game-start");
+    this.lobbyMusic?.stop();
+    this.lobbyMusic = null;
   }
 
   destroy() {

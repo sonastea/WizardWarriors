@@ -4,6 +4,7 @@ import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
 import { DebuffDisplay } from "../ui/DebuffDisplay";
+import { SoundManager, SoundKeys } from "../audio/SoundManager";
 import type {
   GameState,
   ProjectileState,
@@ -44,6 +45,7 @@ interface ProjectileData {
   targetY: number;
   type: ProjectileType;
   trailEmitter?: GameObjects.Particles.ParticleEmitter;
+  hasExploded?: boolean;
 }
 
 export default class MultiplayerGameScene extends Scene {
@@ -57,6 +59,7 @@ export default class MultiplayerGameScene extends Scene {
   private freezeParticleTexture: string = "freeze-particle";
   private explosionParticleTexture: string = "explosion-particle";
   private trailParticleTexture: string = "trail-particle";
+  private soundManager: SoundManager | null = null;
 
   private collisionLayer: Tilemaps.TilemapLayer | null = null;
   private elevationLayer: Tilemaps.TilemapLayer | null = null;
@@ -238,6 +241,7 @@ export default class MultiplayerGameScene extends Scene {
           targetX: worldPoint.x,
           targetY: worldPoint.y,
         });
+        this.soundManager?.play(SoundKeys.POTION_THROW);
       }
     });
 
@@ -258,6 +262,8 @@ export default class MultiplayerGameScene extends Scene {
     }
 
     this.debuffDisplay = new DebuffDisplay(this);
+
+    this.soundManager = new SoundManager(this);
 
     EventBus?.emit("current-scene-ready", this);
   }
@@ -308,6 +314,8 @@ export default class MultiplayerGameScene extends Scene {
       }
 
       this.updatePlayerAnimation(this.localPlayer, moving, direction);
+
+      this.soundManager?.updateFootsteps(moving);
 
       const deltaSeconds = delta / 1000;
       let newX = this.localPlayer.sprite.x + velocityX * deltaSeconds;
@@ -738,6 +746,11 @@ export default class MultiplayerGameScene extends Scene {
       this.debuffDisplay.setDebuff("frozen", frozen);
     }
 
+    if (frozen && playerData === this.localPlayer) {
+      this.soundManager?.play(SoundKeys.PLAYER_FROZEN);
+      this.soundManager?.stopFootsteps();
+    }
+
     if (frozen) {
       playerData.sprite.setTint(0x88ccff);
 
@@ -781,6 +794,11 @@ export default class MultiplayerGameScene extends Scene {
       activeIds.add(state.projectileId);
 
       let projectileData = this.projectiles.get(state.projectileId);
+
+      // Don't create new projectiles that are already inactive (exploded)
+      if (!projectileData && !state.active) {
+        continue;
+      }
 
       if (!projectileData) {
         const sprite = this.add.sprite(
@@ -847,8 +865,10 @@ export default class MultiplayerGameScene extends Scene {
         projectileData.sprite.setVisible(true);
       } else {
         // The server says the projectile is dead (impacted)
-        // Remove from the logical map immediately so we don't try to update it again
-        if (!state.active) {
+        // Only handle explosion once per projectile
+        if (!state.active && !projectileData.hasExploded) {
+          projectileData.hasExploded = true;
+
           projectileData.sprite.x = state.position.x;
           projectileData.sprite.y = state.position.y;
           projectileData.sprite.play("potion-explode");
@@ -863,7 +883,9 @@ export default class MultiplayerGameScene extends Scene {
           // Create lively cold explosion effect
           this.createExplosionEffect(state.position.x, state.position.y);
 
-          this.time.delayedCall(50, () => {
+          this.soundManager?.play(SoundKeys.POTION_EXPLODE);
+
+          this.time.delayedCall(300, () => {
             projectileData.sprite.destroy();
             this.projectiles.delete(state.projectileId);
           });
@@ -913,5 +935,8 @@ export default class MultiplayerGameScene extends Scene {
 
     this.debuffDisplay?.destroy();
     this.debuffDisplay = null;
+
+    this.soundManager?.destroy();
+    this.soundManager = null;
   }
 }
