@@ -53,6 +53,12 @@ export default class MultiplayerGameScene extends Scene {
   private projectiles: Map<string, ProjectileData> = new Map();
   private localPlayer: MultiplayerPlayerData | null = null;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
+  private wasdKeys: {
+    W: Phaser.Input.Keyboard.Key;
+    A: Phaser.Input.Keyboard.Key;
+    S: Phaser.Input.Keyboard.Key;
+    D: Phaser.Input.Keyboard.Key;
+  } | null = null;
   private localPlayerId: string | null = null;
   private minimap: Minimap | null = null;
   private debuffDisplay: DebuffDisplay | null = null;
@@ -217,6 +223,12 @@ export default class MultiplayerGameScene extends Scene {
     this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.5, 0.5);
 
     this.cursors = this.input.keyboard?.createCursorKeys() || null;
+    this.wasdKeys = this.input.keyboard?.addKeys({
+      W: Phaser.Input.Keyboard.KeyCodes.W,
+      A: Phaser.Input.Keyboard.KeyCodes.A,
+      S: Phaser.Input.Keyboard.KeyCodes.S,
+      D: Phaser.Input.Keyboard.KeyCodes.D,
+    }) as typeof this.wasdKeys;
 
     EventBus.on("multiplayer-game-state", this.handleGameState, this);
     EventBus.on("multiplayer-player-joined", this.handlePlayerJoined, this);
@@ -274,10 +286,18 @@ export default class MultiplayerGameScene extends Scene {
     const isFrozen = this.localPlayer.isFrozen;
 
     const currentInput: InputState = {
-      moveUp: !isFrozen && (this.cursors.up?.isDown || false),
-      moveDown: !isFrozen && (this.cursors.down?.isDown || false),
-      moveLeft: !isFrozen && (this.cursors.left?.isDown || false),
-      moveRight: !isFrozen && (this.cursors.right?.isDown || false),
+      moveUp:
+        !isFrozen &&
+        (this.cursors.up?.isDown || this.wasdKeys?.W.isDown || false),
+      moveDown:
+        !isFrozen &&
+        (this.cursors.down?.isDown || this.wasdKeys?.S.isDown || false),
+      moveLeft:
+        !isFrozen &&
+        (this.cursors.left?.isDown || this.wasdKeys?.A.isDown || false),
+      moveRight:
+        !isFrozen &&
+        (this.cursors.right?.isDown || this.wasdKeys?.D.isDown || false),
     };
 
     if (this.localPlayer.sprite.visible) {
