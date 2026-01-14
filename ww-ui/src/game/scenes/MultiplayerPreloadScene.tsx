@@ -49,6 +49,12 @@ export default class MultiplayerPreloadScene extends Scene {
         frameHeight: 16,
       }
     );
+
+    this.load.audio("lobby-music", "assets/audio/lobby-music.ogg");
+    this.load.audio("sfx-potion-throw", "assets/audio/potion-throw.ogg");
+    this.load.audio("sfx-potion-explode", "assets/audio/potion-explode.ogg");
+    this.load.audio("sfx-player-frozen", "assets/audio/player-frozen.ogg");
+    this.load.audio("sfx-footstep", "assets/audio/footstep.ogg");
   }
 
   create() {

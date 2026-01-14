@@ -28,6 +28,7 @@ import styles from "./MultiplayerPhaserGame.module.css";
 import MultiplayerGameScene from "./scenes/MultiplayerGame";
 import MultiplayerLobbyScene from "./scenes/MultiplayerLobby";
 import MultiplayerPreloadScene from "./scenes/MultiplayerPreloadScene";
+import { playUISound } from "./audio/UISounds";
 
 export interface IRefPhaserGame {
   game: Phaser.Game | null;
@@ -503,7 +504,10 @@ const MultiplayerPhaserGame = ({
           {!isConnected && !isConnecting && (
             <div className={styles.disconnectedActions}>
               <button
-                onClick={() => reconnect()}
+                onClick={() => {
+                  playUISound("buttonJoin");
+                  reconnect();
+                }}
                 className={styles.reconnectButton}
               >
                 Reconnect
@@ -585,7 +589,10 @@ const MultiplayerPhaserGame = ({
               {/* Action buttons - horizontal */}
               <div className={styles.actionButtonsContainer}>
                 <button
-                  onClick={handleReady}
+                  onClick={() => {
+                    playUISound("buttonJoin");
+                    handleReady();
+                  }}
                   disabled={isReady}
                   className={styles.playButton}
                 >
@@ -594,7 +601,10 @@ const MultiplayerPhaserGame = ({
 
                 {isGuest && (
                   <button
-                    onClick={() => setShowLoginModal(true)}
+                    onClick={() => {
+                      playUISound("buttonJoin");
+                      setShowLoginModal(true);
+                    }}
                     className={styles.signInButton}
                   >
                     Sign In
@@ -608,6 +618,7 @@ const MultiplayerPhaserGame = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  playUISound("buttonLeave");
                   disconnect();
                   onLeave?.();
                 }}
