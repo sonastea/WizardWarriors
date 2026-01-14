@@ -102,6 +102,7 @@ const MultiplayerPhaserGame = ({
     error,
     connect,
     disconnect,
+    reconnect,
     reconnectWithToken,
   } = useSocket();
   const gameStats = useAtomValue(gameStatsAtom);
@@ -487,10 +488,34 @@ const MultiplayerPhaserGame = ({
 
           {/* Status */}
           <div
-            className={`${styles.statusText} ${error ? styles.statusError : ""}`}
+            className={`${styles.statusText} ${error || (!isConnected && !isConnecting) ? styles.statusError : ""}`}
           >
-            {error ? error : isConnecting ? "Connecting..." : "Not Ready"}
+            {error
+              ? error
+              : isConnecting
+                ? "Connecting..."
+                : isConnected
+                  ? "Not Ready"
+                  : "Disconnected"}
           </div>
+
+          {/* Disconnected state - show reconnect button */}
+          {!isConnected && !isConnecting && (
+            <div className={styles.disconnectedActions}>
+              <button
+                onClick={() => reconnect()}
+                className={styles.reconnectButton}
+              >
+                Reconnect
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className={styles.refreshButton}
+              >
+                Refresh Page
+              </button>
+            </div>
+          )}
 
           {isConnected && (
             <>
