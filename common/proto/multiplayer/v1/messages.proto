@@ -46,6 +46,8 @@ message Announcement {
 message GameState {
   repeated PlayerState players = 1;
   repeated ProjectileState projectiles = 2;
+  repeated ItemState items = 3;
+  QuicksandEvent quicksand_event = 4;
 }
 
 // Player details inside a GameState update
@@ -54,6 +56,8 @@ message PlayerState {
   Vector2 position = 2;
   bool is_frozen   = 3;  // Whether player is currently frozen/stunned
   float frozen_until = 4; // Server timestamp when freeze ends (for client-side prediction)
+  int32 aloe_count = 5;
+  float speed_boost_until = 6;
 }
 
 // Projectile state for syncing across clients
@@ -66,11 +70,34 @@ message ProjectileState {
   bool active = 6;         // Whether projectile is still in flight
 }
 
+message ItemState {
+  string item_id = 1;
+  ItemType type = 2;
+  Vector2 position = 3;
+  bool active = 4;
+}
+
+message TileCoord {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message QuicksandEvent {
+  repeated TileCoord tiles = 1;
+  float expires_at = 2;
+  int32 tile_id = 3;
+}
+
 // Types of projectiles
 enum ProjectileType {
   PROJECTILE_TYPE_UNSPECIFIED = 0;
   PROJECTILE_TYPE_FIREBALL = 1;
   PROJECTILE_TYPE_FREEZE_POTION = 2;
+}
+
+enum ItemType {
+  ITEM_TYPE_UNSPECIFIED = 0;
+  ITEM_TYPE_ALOE = 1;
 }
 
 // Lobby state showing connected users and in-game players

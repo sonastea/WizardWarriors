@@ -6,14 +6,21 @@ import (
 	"time"
 
 	multiplayerv1 "github.com/sonastea/WizardWarriors/common/gen/multiplayer/v1"
+	"github.com/sonastea/WizardWarriors/pkg/logger"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	PlayerRadius       float32 = 16
-	PlayerSpeed        float32 = 150
-	SlowdownSpeed      float32 = 60
-	FreezeImmunityTime float64 = 3.0
+	PlayerRadius            float32 = 16
+	PlayerSpeed             float32 = 150
+	SlowdownSpeed           float32 = 60
+	FreezeImmunityTime      float64 = 3.0
+	SpeedBoostDuration      float64 = 2.0
+	SpeedBoostMultiplier    float32 = 1.2
+	QuicksandEventInterval          = 30 * time.Second
+	QuicksandEventDuration          = 20 * time.Second
+	QuicksandEventTileCount         = 100
+	QuicksandEventTileID            = 237
 )
 
 type PlayerState struct {
@@ -27,30 +34,39 @@ type PlayerState struct {
 	MoveLeft  bool
 	MoveRight bool
 
-	IsFrozen       bool
-	FrozenUntil    time.Time
-	FreezeImmunity time.Time
+	IsFrozen        bool
+	FrozenUntil     time.Time
+	FreezeImmunity  time.Time
+	AloeCount       int
+	SpeedBoostUntil time.Time
 }
 
 type GameStateManager struct {
-	mu                sync.RWMutex
-	players           map[string]*PlayerState
-	hub               *Hub
-	gameMap           *GameMap
-	tickRate          time.Duration
-	lastTick          time.Time
-	projectileManager *ProjectileManager
+	mu                 sync.RWMutex
+	players            map[string]*PlayerState
+	hub                *Hub
+	gameMap            *GameMap
+	tickRate           time.Duration
+	lastTick           time.Time
+	projectileManager  *ProjectileManager
+	itemManager        *ItemManager
+	quicksandTiles     map[int]struct{}
+	quicksandExpiresAt time.Time
+	nextQuicksandAt    time.Time
 }
 
 func NewGameStateManager(hub *Hub, gameMap *GameMap, tickRate time.Duration) *GameStateManager {
 	gsm := &GameStateManager{
-		players:  make(map[string]*PlayerState),
-		hub:      hub,
-		gameMap:  gameMap,
-		tickRate: tickRate,
-		lastTick: time.Now(),
+		players:         make(map[string]*PlayerState),
+		hub:             hub,
+		gameMap:         gameMap,
+		tickRate:        tickRate,
+		lastTick:        time.Now(),
+		quicksandTiles:  make(map[int]struct{}),
+		nextQuicksandAt: time.Now().Add(QuicksandEventInterval),
 	}
 	gsm.projectileManager = NewProjectileManager(gsm)
+	gsm.itemManager = NewItemManager(gsm)
 	return gsm
 }
 
@@ -124,6 +140,8 @@ func (gsm *GameStateManager) FreezePlayer(userID string, duration float64) {
 	if player, exists := gsm.players[userID]; exists {
 		player.IsFrozen = true
 		player.FrozenUntil = time.Now().Add(time.Duration(duration * float64(time.Second)))
+		player.AloeCount = 0
+		player.SpeedBoostUntil = time.Time{}
 	}
 }
 
@@ -134,6 +152,7 @@ func (gsm *GameStateManager) updateFreezeStates() {
 		if player.IsFrozen && now.After(player.FrozenUntil) {
 			player.IsFrozen = false
 			player.FreezeImmunity = now.Add(time.Duration(FreezeImmunityTime * float64(time.Second)))
+			player.SpeedBoostUntil = now.Add(time.Duration(SpeedBoostDuration * float64(time.Second)))
 		}
 	}
 }
@@ -183,7 +202,7 @@ func clamp(value, min, max float32) float32 {
 }
 
 // simulateMovement processes all player inputs and updates positions
-func (gsm *GameStateManager) simulateMovement(deltaSeconds float32) {
+func (gsm *GameStateManager) simulateMovement(deltaSeconds float32, now time.Time) {
 	for _, player := range gsm.players {
 		// Skip movement if frozen
 		if player.IsFrozen {
@@ -192,8 +211,12 @@ func (gsm *GameStateManager) simulateMovement(deltaSeconds float32) {
 
 		// Determine speed based on terrain
 		speed := PlayerSpeed
-		if gsm.gameMap.IsInSlowdown(player.X, player.Y) {
+		if gsm.gameMap.IsInSlowdown(player.X, player.Y) || gsm.isInQuicksand(player.X, player.Y) {
 			speed = SlowdownSpeed
+		}
+
+		if now.Before(player.SpeedBoostUntil) {
+			speed *= SpeedBoostMultiplier
 		}
 
 		var velocityX, velocityY float32 = 0, 0
@@ -264,6 +287,74 @@ func (gsm *GameStateManager) GetMapDimensions() (float32, float32) {
 	return gsm.gameMap.PixelWidth, gsm.gameMap.PixelHeight
 }
 
+func (gsm *GameStateManager) updateQuicksandEvent(now time.Time) {
+	if !gsm.quicksandExpiresAt.IsZero() && now.After(gsm.quicksandExpiresAt) {
+		logger.Debug("[Quicksand] Event expired, clearing %d tiles", len(gsm.quicksandTiles))
+		gsm.quicksandTiles = make(map[int]struct{})
+		gsm.quicksandExpiresAt = time.Time{}
+	}
+
+	if now.Before(gsm.nextQuicksandAt) {
+		return
+	}
+
+	quicksandTiles := make(map[int]struct{})
+	maxAttempts := QuicksandEventTileCount * 10
+	for attempts := 0; len(quicksandTiles) < QuicksandEventTileCount && attempts < maxAttempts; attempts++ {
+		tileX, tileY, ok := gsm.gameMap.RandomPassableTile()
+		if !ok {
+			break
+		}
+		key := tileY*gsm.gameMap.Width + tileX
+		quicksandTiles[key] = struct{}{}
+	}
+
+	gsm.quicksandTiles = quicksandTiles
+	gsm.quicksandExpiresAt = now.Add(QuicksandEventDuration)
+	gsm.nextQuicksandAt = now.Add(QuicksandEventInterval)
+	logger.Debug("[Quicksand] New event started with %d tiles, expires at %v", len(quicksandTiles), gsm.quicksandExpiresAt)
+}
+
+func (gsm *GameStateManager) isInQuicksand(x, y float32) bool {
+	if len(gsm.quicksandTiles) == 0 {
+		return false
+	}
+
+	tileX := int(x) / gsm.gameMap.TileSize
+	tileY := int(y) / gsm.gameMap.TileSize
+
+	if tileX < 0 || tileX >= gsm.gameMap.Width || tileY < 0 || tileY >= gsm.gameMap.Height {
+		return false
+	}
+
+	key := tileY*gsm.gameMap.Width + tileX
+	_, exists := gsm.quicksandTiles[key]
+	return exists
+}
+
+func (gsm *GameStateManager) getQuicksandEventState() *multiplayerv1.QuicksandEvent {
+	if len(gsm.quicksandTiles) == 0 || gsm.quicksandExpiresAt.IsZero() {
+		return nil
+	}
+
+	tiles := make([]*multiplayerv1.TileCoord, 0, len(gsm.quicksandTiles))
+	for key := range gsm.quicksandTiles {
+		tileX := key % gsm.gameMap.Width
+		tileY := key / gsm.gameMap.Width
+		tiles = append(tiles, &multiplayerv1.TileCoord{
+			X: int32(tileX),
+			Y: int32(tileY),
+		})
+	}
+
+	expiresAtUnix := float32(gsm.quicksandExpiresAt.Unix())
+	return &multiplayerv1.QuicksandEvent{
+		Tiles:     tiles,
+		ExpiresAt: expiresAtUnix,
+		TileId:    QuicksandEventTileID,
+	}
+}
+
 func (gsm *GameStateManager) Start() {
 	ticker := time.NewTicker(gsm.tickRate)
 	go func() {
@@ -284,12 +375,14 @@ func (gsm *GameStateManager) tick() {
 
 	// Update freeze states (unfreeze expired)
 	gsm.updateFreezeStates()
+	gsm.updateQuicksandEvent(now)
+	gsm.itemManager.Update(now, gsm.players)
 
 	// Update projectiles
 	gsm.projectileManager.Update(deltaSeconds, gsm.players)
 
 	// Simulate all player movement based on their inputs
-	gsm.simulateMovement(deltaSeconds)
+	gsm.simulateMovement(deltaSeconds, now)
 
 	// Skip broadcast if no players
 	if len(gsm.players) == 0 {
@@ -305,25 +398,36 @@ func (gsm *GameStateManager) tick() {
 			frozenUntilUnix = float32(player.FrozenUntil.Unix())
 		}
 
+		speedBoostUntilUnix := float32(0)
+		if now.Before(player.SpeedBoostUntil) {
+			speedBoostUntilUnix = float32(player.SpeedBoostUntil.Unix())
+		}
+
 		playerStates = append(playerStates, &multiplayerv1.PlayerState{
 			PlayerId: &multiplayerv1.ID{Value: player.UserID},
 			Position: &multiplayerv1.Vector2{
 				X: player.X,
 				Y: player.Y,
 			},
-			IsFrozen:    player.IsFrozen,
-			FrozenUntil: frozenUntilUnix,
+			IsFrozen:        player.IsFrozen,
+			FrozenUntil:     frozenUntilUnix,
+			AloeCount:       int32(player.AloeCount),
+			SpeedBoostUntil: speedBoostUntilUnix,
 		})
 	}
 
 	// Get projectile states
 	projectileStates := gsm.projectileManager.GetActiveProjectiles()
+	itemStates := gsm.itemManager.GetActiveItems()
+	quicksandEvent := gsm.getQuicksandEventState()
 
 	gsm.mu.Unlock()
 
 	gameState := &multiplayerv1.GameState{
-		Players:     playerStates,
-		Projectiles: projectileStates,
+		Players:        playerStates,
+		Projectiles:    projectileStates,
+		Items:          itemStates,
+		QuicksandEvent: quicksandEvent,
 	}
 
 	gameMsg := &multiplayerv1.GameMessage{

@@ -9,6 +9,7 @@ export const SoundKeys = {
   POTION_EXPLODE: "sfx-potion-explode",
   PLAYER_FROZEN: "sfx-player-frozen",
   FOOTSTEP: "sfx-footstep",
+  PICKUP: "sfx-pickup",
 } as const;
 
 export type SoundKey = (typeof SoundKeys)[keyof typeof SoundKeys];
@@ -44,6 +45,7 @@ export class SoundManager {
     [SoundKeys.POTION_EXPLODE]: { volume: 0.7, loop: false },
     [SoundKeys.PLAYER_FROZEN]: { volume: 0.8, loop: false },
     [SoundKeys.FOOTSTEP]: { volume: 0.3 },
+    [SoundKeys.PICKUP]: { volume: 0.75, loop: false },
   };
 
   constructor(scene: Scene) {

@@ -3,6 +3,7 @@ package hub
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 )
 
@@ -217,4 +218,22 @@ func (gm *GameMap) IsValidSpawnPoint(x, y, radius float32) bool {
 
 	// Must not collide with impassable terrain
 	return !gm.IsCollision(x, y, radius)
+}
+
+// RandomPassableTile checks if the coords are able to be passed through
+func (gm *GameMap) RandomPassableTile() (int, int, bool) {
+	if gm.Width == 0 || gm.Height == 0 {
+		return 0, 0, false
+	}
+
+	maxAttempts := gm.Width * gm.Height
+	for range maxAttempts {
+		tileX := rand.Intn(gm.Width)
+		tileY := rand.Intn(gm.Height)
+		if gm.Collision[tileY][tileX] == TileTypePassable {
+			return tileX, tileY, true
+		}
+	}
+
+	return 0, 0, false
 }
