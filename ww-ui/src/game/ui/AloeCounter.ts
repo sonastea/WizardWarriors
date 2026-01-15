@@ -34,18 +34,15 @@ export class AloeCounter {
 
     const size = this.config.iconSize;
 
-    // Background with rounded corners and subtle green border
     this.background = this.scene.add.graphics();
     this.background.fillStyle(0x000000, 0.6);
     this.background.fillRoundedRect(0, 0, size + 28, size, 6);
     this.background.lineStyle(1, 0x7cb342, 0.4);
     this.background.strokeRoundedRect(0, 0, size + 28, size, 6);
 
-    // Draw aloe vera icon
     this.icon = this.scene.add.graphics();
     this.drawAloe(this.icon, size / 2, size / 2, size);
 
-    // Count text
     this.countText = this.scene.add.text(size + 4, size / 2, "0", {
       fontSize: "14px",
       fontStyle: "bold",
@@ -71,30 +68,27 @@ export class AloeCounter {
     const leafLength = size * 0.4;
     const leafWidth = size * 0.12;
 
-    // Draw multiple aloe leaves radiating from center
     const leafAngles = [-0.4, -0.15, 0.15, 0.4];
-    
+
     for (const angleOffset of leafAngles) {
       const angle = -Math.PI / 2 + angleOffset; // Point upward with spread
-      
-      // Main leaf - green gradient effect
+
       graphics.fillStyle(0x7cb342, 1);
       graphics.beginPath();
-      
+
       const tipX = centerX + Math.cos(angle) * leafLength;
       const tipY = centerY + Math.sin(angle) * leafLength;
       const baseLeftX = centerX + Math.cos(angle + Math.PI / 2) * leafWidth;
       const baseLeftY = centerY + Math.sin(angle + Math.PI / 2) * leafWidth;
       const baseRightX = centerX + Math.cos(angle - Math.PI / 2) * leafWidth;
       const baseRightY = centerY + Math.sin(angle - Math.PI / 2) * leafWidth;
-      
+
       graphics.moveTo(tipX, tipY);
       graphics.lineTo(baseLeftX, baseLeftY);
       graphics.lineTo(baseRightX, baseRightY);
       graphics.closePath();
       graphics.fillPath();
-      
-      // Lighter center line on leaf
+
       graphics.lineStyle(1, 0x9ccc65, 0.8);
       graphics.beginPath();
       graphics.moveTo(centerX, centerY);
@@ -102,7 +96,6 @@ export class AloeCounter {
       graphics.strokePath();
     }
 
-    // Center base of the plant
     graphics.fillStyle(0x558b2f, 1);
     graphics.fillCircle(centerX, centerY + size * 0.1, size * 0.1);
   }
