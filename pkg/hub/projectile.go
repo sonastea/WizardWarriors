@@ -190,6 +190,8 @@ func (pm *ProjectileManager) freezePlayersInRadius(x, y, radius float32, exclude
 		if distSq <= radiusSq {
 			player.IsFrozen = true
 			player.FrozenUntil = now.Add(time.Duration(FreezeDuration * float64(time.Second)))
+			player.AloeCount = 0
+			player.SpeedBoostUntil = time.Time{}
 
 			logger.Info("Player %s frozen by freeze potion", player.UserID)
 		}

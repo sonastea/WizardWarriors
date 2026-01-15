@@ -4,16 +4,25 @@ import { CONSTANTS } from "../constants";
 import { EventBus } from "../EventBus";
 import { Minimap } from "../ui/Minimap";
 import { DebuffDisplay } from "../ui/DebuffDisplay";
+import { AloeCounter } from "../ui/AloeCounter";
 import { SoundManager, SoundKeys } from "../audio/SoundManager";
 import type {
   GameState,
+  ItemState,
   ProjectileState,
+  QuicksandEvent,
 } from "@common/gen/multiplayer/v1/messages_pb";
-import { ProjectileType } from "@common/gen/multiplayer/v1/messages_pb";
+import {
+  ItemType,
+  ProjectileType,
+} from "@common/gen/multiplayer/v1/messages_pb";
 
 const PLAYER_SIZE = 16;
 const PLAYER_SPEED = 150;
 const SLOWDOWN_SPEED = 60;
+const SPEED_BOOST_MULTIPLIER = 1.2;
+const EVENT_SLOWDOWN_TILE_ID = 237;
+const ALOE_FRAME = 65;
 
 const COLLISION_TILES = {
   obstacles: [55, 56, 57, 58, 59, 60, 61, 62, 63],
@@ -36,6 +45,8 @@ interface MultiplayerPlayerData {
   currentAnimationKey: string;
   isEnemy: boolean;
   isFrozen: boolean;
+  aloeCount: number;
+  speedBoostUntil: number;
   frozenParticles?: GameObjects.Particles.ParticleEmitter;
 }
 
@@ -48,9 +59,15 @@ interface ProjectileData {
   hasExploded?: boolean;
 }
 
+interface ItemData {
+  sprite: GameObjects.Sprite;
+  type: ItemType;
+}
+
 export default class MultiplayerGameScene extends Scene {
   private players: Map<string, MultiplayerPlayerData> = new Map();
   private projectiles: Map<string, ProjectileData> = new Map();
+  private items: Map<string, ItemData> = new Map();
   private localPlayer: MultiplayerPlayerData | null = null;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private wasdKeys: {
@@ -62,6 +79,7 @@ export default class MultiplayerGameScene extends Scene {
   private localPlayerId: string | null = null;
   private minimap: Minimap | null = null;
   private debuffDisplay: DebuffDisplay | null = null;
+  private aloeCounter: AloeCounter | null = null;
   private freezeParticleTexture: string = "freeze-particle";
   private explosionParticleTexture: string = "explosion-particle";
   private trailParticleTexture: string = "trail-particle";
@@ -70,6 +88,9 @@ export default class MultiplayerGameScene extends Scene {
   private collisionLayer: Tilemaps.TilemapLayer | null = null;
   private elevationLayer: Tilemaps.TilemapLayer | null = null;
   private terrainLayer: Tilemaps.TilemapLayer | null = null;
+  private eventLayer: Tilemaps.TilemapLayer | null = null;
+
+  private activeQuicksandTiles: Array<{ x: number; y: number }> = [];
 
   private mapWidth: number = 0;
   private mapHeight: number = 0;
@@ -116,6 +137,8 @@ export default class MultiplayerGameScene extends Scene {
       currentAnimationKey: "multiplayer-idle",
       isEnemy,
       isFrozen: false,
+      aloeCount: 0,
+      speedBoostUntil: 0,
     };
   }
 
@@ -176,6 +199,7 @@ export default class MultiplayerGameScene extends Scene {
     this.elevationLayer = map.createLayer("elevation", tileset, 0, 0);
     this.collisionLayer = map.createLayer("collisions", tileset, 0, 0);
     this.terrainLayer = map.createLayer("terrain", tileset, 0, 0);
+    this.eventLayer = map.createLayer("event", tileset, 0, 0);
 
     if (this.collisionLayer) {
       this.collisionLayer.setCollision([
@@ -209,6 +233,11 @@ export default class MultiplayerGameScene extends Scene {
 
     if (this.terrainLayer) {
       this.terrainLayer.setVisible(true);
+    }
+
+    if (this.eventLayer) {
+      this.eventLayer.setVisible(true);
+      this.eventLayer.setDepth(5);
     }
 
     this.cameras.main.setBounds(0, 0, this.mapWidth, this.mapHeight);
@@ -274,6 +303,7 @@ export default class MultiplayerGameScene extends Scene {
     }
 
     this.debuffDisplay = new DebuffDisplay(this);
+    this.aloeCounter = new AloeCounter(this);
 
     this.soundManager = new SoundManager(this);
 
@@ -305,7 +335,12 @@ export default class MultiplayerGameScene extends Scene {
         this.localPlayer.sprite.x,
         this.localPlayer.sprite.y
       );
-      const currentSpeed = inSlowdown ? SLOWDOWN_SPEED : PLAYER_SPEED;
+      const baseSpeed = inSlowdown ? SLOWDOWN_SPEED : PLAYER_SPEED;
+      const nowSeconds = Date.now() / 1000;
+      const hasSpeedBoost = this.localPlayer.speedBoostUntil > nowSeconds;
+      const currentSpeed = hasSpeedBoost
+        ? baseSpeed * SPEED_BOOST_MULTIPLIER
+        : baseSpeed;
 
       let velocityX = 0;
       let velocityY = 0;
@@ -426,6 +461,13 @@ export default class MultiplayerGameScene extends Scene {
       }
     }
 
+    if (this.eventLayer) {
+      const tile = this.eventLayer.getTileAtWorldXY(x, y);
+      if (tile && tile.index === EVENT_SLOWDOWN_TILE_ID) {
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -450,6 +492,12 @@ export default class MultiplayerGameScene extends Scene {
           }
 
           this.setPlayerFrozen(this.localPlayer, playerState.isFrozen);
+          if (playerState.aloeCount > this.localPlayer.aloeCount) {
+            this.soundManager?.play(SoundKeys.PICKUP);
+          }
+          this.localPlayer.aloeCount = playerState.aloeCount;
+          this.localPlayer.speedBoostUntil = playerState.speedBoostUntil;
+          this.aloeCounter?.setCount(playerState.aloeCount);
 
           const distance = Phaser.Math.Distance.Between(
             this.localPlayer.sprite.x,
@@ -486,7 +534,9 @@ export default class MultiplayerGameScene extends Scene {
             playerId,
             position.x,
             position.y,
-            playerState.isFrozen
+            playerState.isFrozen,
+            playerState.aloeCount,
+            playerState.speedBoostUntil
           );
         }
       }
@@ -495,6 +545,14 @@ export default class MultiplayerGameScene extends Scene {
     if (data.projectiles) {
       this.updateProjectiles(data.projectiles);
     }
+
+    if (data.items) {
+      this.updateItems(data.items);
+    } else {
+      this.updateItems([]);
+    }
+
+    this.updateQuicksandEvent(data.quicksandEvent);
   }
 
   handlePlayerJoined(data: { playerId: string; x: number; y: number }) {
@@ -528,7 +586,9 @@ export default class MultiplayerGameScene extends Scene {
     playerId: string,
     x: number,
     y: number,
-    isFrozen: boolean = false
+    isFrozen: boolean = false,
+    aloeCount: number = 0,
+    speedBoostUntil: number = 0
   ) {
     const playerData = this.players.get(playerId);
 
@@ -540,6 +600,8 @@ export default class MultiplayerGameScene extends Scene {
       playerData.sprite.y = Phaser.Math.Linear(playerData.sprite.y, y, 0.3);
 
       this.setPlayerFrozen(playerData, isFrozen);
+      playerData.aloeCount = aloeCount;
+      playerData.speedBoostUntil = speedBoostUntil;
 
       if (!isFrozen) {
         const dx = x - prevX;
@@ -925,11 +987,107 @@ export default class MultiplayerGameScene extends Scene {
     });
   }
 
+  private updateItems(itemStates: ItemState[]): void {
+    const activeIds = new Set<string>();
+
+    for (const state of itemStates) {
+      if (!state.itemId || !state.position) continue;
+      if (!state.active) {
+        continue;
+      }
+
+      activeIds.add(state.itemId);
+
+      let itemData = this.items.get(state.itemId);
+      if (!itemData) {
+        const sprite = this.add.sprite(
+          state.position.x,
+          state.position.y,
+          "multiplayer-sheet",
+          ALOE_FRAME
+        );
+        sprite.setDepth(9);
+
+        itemData = {
+          sprite,
+          type: state.type,
+        };
+        this.items.set(state.itemId, itemData);
+      }
+
+      itemData.sprite.x = state.position.x;
+      itemData.sprite.y = state.position.y;
+      itemData.sprite.setVisible(true);
+    }
+
+    this.items.forEach((data, id) => {
+      if (!activeIds.has(id)) {
+        data.sprite.destroy();
+        this.items.delete(id);
+      }
+    });
+  }
+
+  private updateQuicksandEvent(event?: QuicksandEvent): void {
+    if (!this.eventLayer) return;
+
+    this.clearQuicksandTiles();
+
+    if (!event || event.tiles.length === 0) {
+      return;
+    }
+
+    const tileId = event.tileId || EVENT_SLOWDOWN_TILE_ID;
+    const layerWidth = this.eventLayer.layer.width;
+    const layerHeight = this.eventLayer.layer.height;
+    for (const tile of event.tiles) {
+      if (
+        tile.x < 0 ||
+        tile.y < 0 ||
+        tile.x >= layerWidth ||
+        tile.y >= layerHeight
+      ) {
+        continue;
+      }
+      this.eventLayer.putTileAt(tileId, tile.x, tile.y);
+      this.activeQuicksandTiles.push({ x: tile.x, y: tile.y });
+    }
+  }
+
+  private clearQuicksandTiles(): void {
+    if (!this.eventLayer || this.activeQuicksandTiles.length === 0) {
+      this.activeQuicksandTiles = [];
+      return;
+    }
+
+    const layerWidth = this.eventLayer.layer.width;
+    const layerHeight = this.eventLayer.layer.height;
+    for (const tile of this.activeQuicksandTiles) {
+      if (
+        tile.x < 0 ||
+        tile.y < 0 ||
+        tile.x >= layerWidth ||
+        tile.y >= layerHeight
+      ) {
+        continue;
+      }
+      this.eventLayer.removeTileAt(tile.x, tile.y);
+    }
+
+    this.activeQuicksandTiles = [];
+  }
+
   destroy() {
     EventBus.removeListener("multiplayer-game-state");
     EventBus.removeListener("multiplayer-player-joined");
     EventBus.removeListener("multiplayer-player-left");
     EventBus.removeListener("set-local-player-id");
+
+    this.items.forEach((data) => {
+      data.sprite.destroy();
+    });
+    this.items.clear();
+    this.clearQuicksandTiles();
 
     this.projectiles.forEach((data) => {
       if (data.trailEmitter) {
@@ -955,6 +1113,9 @@ export default class MultiplayerGameScene extends Scene {
 
     this.debuffDisplay?.destroy();
     this.debuffDisplay = null;
+
+    this.aloeCounter?.destroy();
+    this.aloeCounter = null;
 
     this.soundManager?.destroy();
     this.soundManager = null;

@@ -130,6 +130,52 @@ func (ProjectileType) EnumDescriptor() ([]byte, []int) {
 	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{1}
 }
 
+type ItemType int32
+
+const (
+	ItemType_ITEM_TYPE_UNSPECIFIED ItemType = 0
+	ItemType_ITEM_TYPE_ALOE        ItemType = 1
+)
+
+// Enum value maps for ItemType.
+var (
+	ItemType_name = map[int32]string{
+		0: "ITEM_TYPE_UNSPECIFIED",
+		1: "ITEM_TYPE_ALOE",
+	}
+	ItemType_value = map[string]int32{
+		"ITEM_TYPE_UNSPECIFIED": 0,
+		"ITEM_TYPE_ALOE":        1,
+	}
+)
+
+func (x ItemType) Enum() *ItemType {
+	p := new(ItemType)
+	*p = x
+	return p
+}
+
+func (x ItemType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ItemType) Descriptor() protoreflect.EnumDescriptor {
+	return file_multiplayer_v1_messages_proto_enumTypes[2].Descriptor()
+}
+
+func (ItemType) Type() protoreflect.EnumType {
+	return &file_multiplayer_v1_messages_proto_enumTypes[2]
+}
+
+func (x ItemType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ItemType.Descriptor instead.
+func (ItemType) EnumDescriptor() ([]byte, []int) {
+	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{2}
+}
+
 // The wrapper for all incoming/outgoing WebSocket messages
 type GameMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -393,11 +439,13 @@ func (x *Announcement) GetSentAtUnix() int64 {
 
 // Periodic snapshot of the entire game state (for syncing position drift)
 type GameState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Players       []*PlayerState         `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
-	Projectiles   []*ProjectileState     `protobuf:"bytes,2,rep,name=projectiles,proto3" json:"projectiles,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Players        []*PlayerState         `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
+	Projectiles    []*ProjectileState     `protobuf:"bytes,2,rep,name=projectiles,proto3" json:"projectiles,omitempty"`
+	Items          []*ItemState           `protobuf:"bytes,3,rep,name=items,proto3" json:"items,omitempty"`
+	QuicksandEvent *QuicksandEvent        `protobuf:"bytes,4,opt,name=quicksand_event,json=quicksandEvent,proto3" json:"quicksand_event,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GameState) Reset() {
@@ -444,15 +492,31 @@ func (x *GameState) GetProjectiles() []*ProjectileState {
 	return nil
 }
 
+func (x *GameState) GetItems() []*ItemState {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *GameState) GetQuicksandEvent() *QuicksandEvent {
+	if x != nil {
+		return x.QuicksandEvent
+	}
+	return nil
+}
+
 // Player details inside a GameState update
 type PlayerState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      *ID                    `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Position      *Vector2               `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
-	IsFrozen      bool                   `protobuf:"varint,3,opt,name=is_frozen,json=isFrozen,proto3" json:"is_frozen,omitempty"`           // Whether player is currently frozen/stunned
-	FrozenUntil   float32                `protobuf:"fixed32,4,opt,name=frozen_until,json=frozenUntil,proto3" json:"frozen_until,omitempty"` // Server timestamp when freeze ends (for client-side prediction)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId        *ID                    `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Position        *Vector2               `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
+	IsFrozen        bool                   `protobuf:"varint,3,opt,name=is_frozen,json=isFrozen,proto3" json:"is_frozen,omitempty"`           // Whether player is currently frozen/stunned
+	FrozenUntil     float32                `protobuf:"fixed32,4,opt,name=frozen_until,json=frozenUntil,proto3" json:"frozen_until,omitempty"` // Server timestamp when freeze ends (for client-side prediction)
+	AloeCount       int32                  `protobuf:"varint,5,opt,name=aloe_count,json=aloeCount,proto3" json:"aloe_count,omitempty"`
+	SpeedBoostUntil float32                `protobuf:"fixed32,6,opt,name=speed_boost_until,json=speedBoostUntil,proto3" json:"speed_boost_until,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PlayerState) Reset() {
@@ -509,6 +573,20 @@ func (x *PlayerState) GetIsFrozen() bool {
 func (x *PlayerState) GetFrozenUntil() float32 {
 	if x != nil {
 		return x.FrozenUntil
+	}
+	return 0
+}
+
+func (x *PlayerState) GetAloeCount() int32 {
+	if x != nil {
+		return x.AloeCount
+	}
+	return 0
+}
+
+func (x *PlayerState) GetSpeedBoostUntil() float32 {
+	if x != nil {
+		return x.SpeedBoostUntil
 	}
 	return 0
 }
@@ -598,6 +676,186 @@ func (x *ProjectileState) GetActive() bool {
 	return false
 }
 
+type ItemState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Type          ItemType               `protobuf:"varint,2,opt,name=type,proto3,enum=multiplayer.v1.ItemType" json:"type,omitempty"`
+	Position      *Vector2               `protobuf:"bytes,3,opt,name=position,proto3" json:"position,omitempty"`
+	Active        bool                   `protobuf:"varint,4,opt,name=active,proto3" json:"active,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ItemState) Reset() {
+	*x = ItemState{}
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ItemState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ItemState) ProtoMessage() {}
+
+func (x *ItemState) ProtoReflect() protoreflect.Message {
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ItemState.ProtoReflect.Descriptor instead.
+func (*ItemState) Descriptor() ([]byte, []int) {
+	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ItemState) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *ItemState) GetType() ItemType {
+	if x != nil {
+		return x.Type
+	}
+	return ItemType_ITEM_TYPE_UNSPECIFIED
+}
+
+func (x *ItemState) GetPosition() *Vector2 {
+	if x != nil {
+		return x.Position
+	}
+	return nil
+}
+
+func (x *ItemState) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+type TileCoord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	X             int32                  `protobuf:"varint,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y             int32                  `protobuf:"varint,2,opt,name=y,proto3" json:"y,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TileCoord) Reset() {
+	*x = TileCoord{}
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TileCoord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TileCoord) ProtoMessage() {}
+
+func (x *TileCoord) ProtoReflect() protoreflect.Message {
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TileCoord.ProtoReflect.Descriptor instead.
+func (*TileCoord) Descriptor() ([]byte, []int) {
+	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TileCoord) GetX() int32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *TileCoord) GetY() int32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+type QuicksandEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tiles         []*TileCoord           `protobuf:"bytes,1,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	ExpiresAt     float32                `protobuf:"fixed32,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	TileId        int32                  `protobuf:"varint,3,opt,name=tile_id,json=tileId,proto3" json:"tile_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QuicksandEvent) Reset() {
+	*x = QuicksandEvent{}
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuicksandEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuicksandEvent) ProtoMessage() {}
+
+func (x *QuicksandEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuicksandEvent.ProtoReflect.Descriptor instead.
+func (*QuicksandEvent) Descriptor() ([]byte, []int) {
+	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *QuicksandEvent) GetTiles() []*TileCoord {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
+func (x *QuicksandEvent) GetExpiresAt() float32 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *QuicksandEvent) GetTileId() int32 {
+	if x != nil {
+		return x.TileId
+	}
+	return 0
+}
+
 // Lobby state showing connected users and in-game players
 type LobbyState struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -609,7 +867,7 @@ type LobbyState struct {
 
 func (x *LobbyState) Reset() {
 	*x = LobbyState{}
-	mi := &file_multiplayer_v1_messages_proto_msgTypes[6]
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +879,7 @@ func (x *LobbyState) String() string {
 func (*LobbyState) ProtoMessage() {}
 
 func (x *LobbyState) ProtoReflect() protoreflect.Message {
-	mi := &file_multiplayer_v1_messages_proto_msgTypes[6]
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +892,7 @@ func (x *LobbyState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LobbyState.ProtoReflect.Descriptor instead.
 func (*LobbyState) Descriptor() ([]byte, []int) {
-	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{6}
+	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LobbyState) GetLobbyUsers() []*LobbyUser {
@@ -663,7 +921,7 @@ type LobbyUser struct {
 
 func (x *LobbyUser) Reset() {
 	*x = LobbyUser{}
-	mi := &file_multiplayer_v1_messages_proto_msgTypes[7]
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -675,7 +933,7 @@ func (x *LobbyUser) String() string {
 func (*LobbyUser) ProtoMessage() {}
 
 func (x *LobbyUser) ProtoReflect() protoreflect.Message {
-	mi := &file_multiplayer_v1_messages_proto_msgTypes[7]
+	mi := &file_multiplayer_v1_messages_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +946,7 @@ func (x *LobbyUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LobbyUser.ProtoReflect.Descriptor instead.
 func (*LobbyUser) Descriptor() ([]byte, []int) {
-	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{7}
+	return file_multiplayer_v1_messages_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LobbyUser) GetUserId() *ID {
@@ -737,22 +995,40 @@ const file_multiplayer_v1_messages_proto_rawDesc = "" +
 	"\fAnnouncement\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12 \n" +
 	"\fsent_at_unix\x18\x02 \x01(\x03R\n" +
-	"sentAtUnix\"\x85\x01\n" +
+	"sentAtUnix\"\xff\x01\n" +
 	"\tGameState\x125\n" +
 	"\aplayers\x18\x01 \x03(\v2\x1b.multiplayer.v1.PlayerStateR\aplayers\x12A\n" +
-	"\vprojectiles\x18\x02 \x03(\v2\x1f.multiplayer.v1.ProjectileStateR\vprojectiles\"\xb3\x01\n" +
+	"\vprojectiles\x18\x02 \x03(\v2\x1f.multiplayer.v1.ProjectileStateR\vprojectiles\x12/\n" +
+	"\x05items\x18\x03 \x03(\v2\x19.multiplayer.v1.ItemStateR\x05items\x12G\n" +
+	"\x0fquicksand_event\x18\x04 \x01(\v2\x1e.multiplayer.v1.QuicksandEventR\x0equicksandEvent\"\xfe\x01\n" +
 	"\vPlayerState\x12/\n" +
 	"\tplayer_id\x18\x01 \x01(\v2\x12.multiplayer.v1.IDR\bplayerId\x123\n" +
 	"\bposition\x18\x02 \x01(\v2\x17.multiplayer.v1.Vector2R\bposition\x12\x1b\n" +
 	"\tis_frozen\x18\x03 \x01(\bR\bisFrozen\x12!\n" +
-	"\ffrozen_until\x18\x04 \x01(\x02R\vfrozenUntil\"\x97\x02\n" +
+	"\ffrozen_until\x18\x04 \x01(\x02R\vfrozenUntil\x12\x1d\n" +
+	"\n" +
+	"aloe_count\x18\x05 \x01(\x05R\taloeCount\x12*\n" +
+	"\x11speed_boost_until\x18\x06 \x01(\x02R\x0fspeedBoostUntil\"\x97\x02\n" +
 	"\x0fProjectileState\x12#\n" +
 	"\rprojectile_id\x18\x01 \x01(\tR\fprojectileId\x122\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x1e.multiplayer.v1.ProjectileTypeR\x04type\x123\n" +
 	"\bposition\x18\x03 \x01(\v2\x17.multiplayer.v1.Vector2R\bposition\x12/\n" +
 	"\x06target\x18\x04 \x01(\v2\x17.multiplayer.v1.Vector2R\x06target\x12-\n" +
 	"\bowner_id\x18\x05 \x01(\v2\x12.multiplayer.v1.IDR\aownerId\x12\x16\n" +
-	"\x06active\x18\x06 \x01(\bR\x06active\"\x82\x01\n" +
+	"\x06active\x18\x06 \x01(\bR\x06active\"\x9f\x01\n" +
+	"\tItemState\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12,\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x18.multiplayer.v1.ItemTypeR\x04type\x123\n" +
+	"\bposition\x18\x03 \x01(\v2\x17.multiplayer.v1.Vector2R\bposition\x12\x16\n" +
+	"\x06active\x18\x04 \x01(\bR\x06active\"'\n" +
+	"\tTileCoord\x12\f\n" +
+	"\x01x\x18\x01 \x01(\x05R\x01x\x12\f\n" +
+	"\x01y\x18\x02 \x01(\x05R\x01y\"y\n" +
+	"\x0eQuicksandEvent\x12/\n" +
+	"\x05tiles\x18\x01 \x03(\v2\x19.multiplayer.v1.TileCoordR\x05tiles\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\x02R\texpiresAt\x12\x17\n" +
+	"\atile_id\x18\x03 \x01(\x05R\x06tileId\"\x82\x01\n" +
 	"\n" +
 	"LobbyState\x12:\n" +
 	"\vlobby_users\x18\x01 \x03(\v2\x19.multiplayer.v1.LobbyUserR\n" +
@@ -773,7 +1049,10 @@ const file_multiplayer_v1_messages_proto_rawDesc = "" +
 	"\x0eProjectileType\x12\x1f\n" +
 	"\x1bPROJECTILE_TYPE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18PROJECTILE_TYPE_FIREBALL\x10\x01\x12!\n" +
-	"\x1dPROJECTILE_TYPE_FREEZE_POTION\x10\x02B\xc8\x01\n" +
+	"\x1dPROJECTILE_TYPE_FREEZE_POTION\x10\x02*9\n" +
+	"\bItemType\x12\x19\n" +
+	"\x15ITEM_TYPE_UNSPECIFIED\x10\x00\x12\x12\n" +
+	"\x0eITEM_TYPE_ALOE\x10\x01B\xc8\x01\n" +
 	"\x12com.multiplayer.v1B\rMessagesProtoP\x01ZJgithub.com/sonastea/WizardWarriors/common/gen/multiplayer/v1;multiplayerv1\xa2\x02\x03MXX\xaa\x02\x0eMultiplayer.V1\xca\x02\x0eMultiplayer\\V1\xe2\x02\x1aMultiplayer\\V1\\GPBMetadata\xea\x02\x0fMultiplayer::V1b\x06proto3"
 
 var (
@@ -788,47 +1067,56 @@ func file_multiplayer_v1_messages_proto_rawDescGZIP() []byte {
 	return file_multiplayer_v1_messages_proto_rawDescData
 }
 
-var file_multiplayer_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_multiplayer_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_multiplayer_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_multiplayer_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_multiplayer_v1_messages_proto_goTypes = []any{
 	(GameMessageType)(0),    // 0: multiplayer.v1.GameMessageType
 	(ProjectileType)(0),     // 1: multiplayer.v1.ProjectileType
-	(*GameMessage)(nil),     // 2: multiplayer.v1.GameMessage
-	(*ChatMessage)(nil),     // 3: multiplayer.v1.ChatMessage
-	(*Announcement)(nil),    // 4: multiplayer.v1.Announcement
-	(*GameState)(nil),       // 5: multiplayer.v1.GameState
-	(*PlayerState)(nil),     // 6: multiplayer.v1.PlayerState
-	(*ProjectileState)(nil), // 7: multiplayer.v1.ProjectileState
-	(*LobbyState)(nil),      // 8: multiplayer.v1.LobbyState
-	(*LobbyUser)(nil),       // 9: multiplayer.v1.LobbyUser
-	(*PlayerEvent)(nil),     // 10: multiplayer.v1.PlayerEvent
-	(*ID)(nil),              // 11: multiplayer.v1.ID
-	(*Vector2)(nil),         // 12: multiplayer.v1.Vector2
+	(ItemType)(0),           // 2: multiplayer.v1.ItemType
+	(*GameMessage)(nil),     // 3: multiplayer.v1.GameMessage
+	(*ChatMessage)(nil),     // 4: multiplayer.v1.ChatMessage
+	(*Announcement)(nil),    // 5: multiplayer.v1.Announcement
+	(*GameState)(nil),       // 6: multiplayer.v1.GameState
+	(*PlayerState)(nil),     // 7: multiplayer.v1.PlayerState
+	(*ProjectileState)(nil), // 8: multiplayer.v1.ProjectileState
+	(*ItemState)(nil),       // 9: multiplayer.v1.ItemState
+	(*TileCoord)(nil),       // 10: multiplayer.v1.TileCoord
+	(*QuicksandEvent)(nil),  // 11: multiplayer.v1.QuicksandEvent
+	(*LobbyState)(nil),      // 12: multiplayer.v1.LobbyState
+	(*LobbyUser)(nil),       // 13: multiplayer.v1.LobbyUser
+	(*PlayerEvent)(nil),     // 14: multiplayer.v1.PlayerEvent
+	(*ID)(nil),              // 15: multiplayer.v1.ID
+	(*Vector2)(nil),         // 16: multiplayer.v1.Vector2
 }
 var file_multiplayer_v1_messages_proto_depIdxs = []int32{
 	0,  // 0: multiplayer.v1.GameMessage.type:type_name -> multiplayer.v1.GameMessageType
-	3,  // 1: multiplayer.v1.GameMessage.chat_message:type_name -> multiplayer.v1.ChatMessage
-	10, // 2: multiplayer.v1.GameMessage.player_event:type_name -> multiplayer.v1.PlayerEvent
-	5,  // 3: multiplayer.v1.GameMessage.game_state:type_name -> multiplayer.v1.GameState
-	4,  // 4: multiplayer.v1.GameMessage.chat_announcement:type_name -> multiplayer.v1.Announcement
-	8,  // 5: multiplayer.v1.GameMessage.lobby_state:type_name -> multiplayer.v1.LobbyState
-	11, // 6: multiplayer.v1.ChatMessage.sender_id:type_name -> multiplayer.v1.ID
-	6,  // 7: multiplayer.v1.GameState.players:type_name -> multiplayer.v1.PlayerState
-	7,  // 8: multiplayer.v1.GameState.projectiles:type_name -> multiplayer.v1.ProjectileState
-	11, // 9: multiplayer.v1.PlayerState.player_id:type_name -> multiplayer.v1.ID
-	12, // 10: multiplayer.v1.PlayerState.position:type_name -> multiplayer.v1.Vector2
-	1,  // 11: multiplayer.v1.ProjectileState.type:type_name -> multiplayer.v1.ProjectileType
-	12, // 12: multiplayer.v1.ProjectileState.position:type_name -> multiplayer.v1.Vector2
-	12, // 13: multiplayer.v1.ProjectileState.target:type_name -> multiplayer.v1.Vector2
-	11, // 14: multiplayer.v1.ProjectileState.owner_id:type_name -> multiplayer.v1.ID
-	9,  // 15: multiplayer.v1.LobbyState.lobby_users:type_name -> multiplayer.v1.LobbyUser
-	9,  // 16: multiplayer.v1.LobbyState.game_users:type_name -> multiplayer.v1.LobbyUser
-	11, // 17: multiplayer.v1.LobbyUser.user_id:type_name -> multiplayer.v1.ID
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	4,  // 1: multiplayer.v1.GameMessage.chat_message:type_name -> multiplayer.v1.ChatMessage
+	14, // 2: multiplayer.v1.GameMessage.player_event:type_name -> multiplayer.v1.PlayerEvent
+	6,  // 3: multiplayer.v1.GameMessage.game_state:type_name -> multiplayer.v1.GameState
+	5,  // 4: multiplayer.v1.GameMessage.chat_announcement:type_name -> multiplayer.v1.Announcement
+	12, // 5: multiplayer.v1.GameMessage.lobby_state:type_name -> multiplayer.v1.LobbyState
+	15, // 6: multiplayer.v1.ChatMessage.sender_id:type_name -> multiplayer.v1.ID
+	7,  // 7: multiplayer.v1.GameState.players:type_name -> multiplayer.v1.PlayerState
+	8,  // 8: multiplayer.v1.GameState.projectiles:type_name -> multiplayer.v1.ProjectileState
+	9,  // 9: multiplayer.v1.GameState.items:type_name -> multiplayer.v1.ItemState
+	11, // 10: multiplayer.v1.GameState.quicksand_event:type_name -> multiplayer.v1.QuicksandEvent
+	15, // 11: multiplayer.v1.PlayerState.player_id:type_name -> multiplayer.v1.ID
+	16, // 12: multiplayer.v1.PlayerState.position:type_name -> multiplayer.v1.Vector2
+	1,  // 13: multiplayer.v1.ProjectileState.type:type_name -> multiplayer.v1.ProjectileType
+	16, // 14: multiplayer.v1.ProjectileState.position:type_name -> multiplayer.v1.Vector2
+	16, // 15: multiplayer.v1.ProjectileState.target:type_name -> multiplayer.v1.Vector2
+	15, // 16: multiplayer.v1.ProjectileState.owner_id:type_name -> multiplayer.v1.ID
+	2,  // 17: multiplayer.v1.ItemState.type:type_name -> multiplayer.v1.ItemType
+	16, // 18: multiplayer.v1.ItemState.position:type_name -> multiplayer.v1.Vector2
+	10, // 19: multiplayer.v1.QuicksandEvent.tiles:type_name -> multiplayer.v1.TileCoord
+	13, // 20: multiplayer.v1.LobbyState.lobby_users:type_name -> multiplayer.v1.LobbyUser
+	13, // 21: multiplayer.v1.LobbyState.game_users:type_name -> multiplayer.v1.LobbyUser
+	15, // 22: multiplayer.v1.LobbyUser.user_id:type_name -> multiplayer.v1.ID
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_multiplayer_v1_messages_proto_init() }
@@ -850,8 +1138,8 @@ func file_multiplayer_v1_messages_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_multiplayer_v1_messages_proto_rawDesc), len(file_multiplayer_v1_messages_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   8,
+			NumEnums:      3,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

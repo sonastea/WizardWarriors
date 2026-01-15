@@ -55,6 +55,7 @@ export default class MultiplayerPreloadScene extends Scene {
     this.load.audio("sfx-potion-explode", "assets/audio/potion-explode.ogg");
     this.load.audio("sfx-player-frozen", "assets/audio/player-frozen.ogg");
     this.load.audio("sfx-footstep", "assets/audio/footstep.ogg");
+    this.load.audio("sfx-pickup", "assets/audio/pickup.ogg");
   }
 
   create() {

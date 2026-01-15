@@ -136,6 +136,16 @@ export declare type GameState = Message<"multiplayer.v1.GameState"> & {
    * @generated from field: repeated multiplayer.v1.ProjectileState projectiles = 2;
    */
   projectiles: ProjectileState[];
+
+  /**
+   * @generated from field: repeated multiplayer.v1.ItemState items = 3;
+   */
+  items: ItemState[];
+
+  /**
+   * @generated from field: multiplayer.v1.QuicksandEvent quicksand_event = 4;
+   */
+  quicksandEvent?: QuicksandEvent;
 };
 
 /**
@@ -173,6 +183,16 @@ export declare type PlayerState = Message<"multiplayer.v1.PlayerState"> & {
    * @generated from field: float frozen_until = 4;
    */
   frozenUntil: number;
+
+  /**
+   * @generated from field: int32 aloe_count = 5;
+   */
+  aloeCount: number;
+
+  /**
+   * @generated from field: float speed_boost_until = 6;
+   */
+  speedBoostUntil: number;
 };
 
 /**
@@ -229,6 +249,84 @@ export declare type ProjectileState = Message<"multiplayer.v1.ProjectileState"> 
  * Use `create(ProjectileStateSchema)` to create a new message.
  */
 export declare const ProjectileStateSchema: GenMessage<ProjectileState>;
+
+/**
+ * @generated from message multiplayer.v1.ItemState
+ */
+export declare type ItemState = Message<"multiplayer.v1.ItemState"> & {
+  /**
+   * @generated from field: string item_id = 1;
+   */
+  itemId: string;
+
+  /**
+   * @generated from field: multiplayer.v1.ItemType type = 2;
+   */
+  type: ItemType;
+
+  /**
+   * @generated from field: multiplayer.v1.Vector2 position = 3;
+   */
+  position?: Vector2;
+
+  /**
+   * @generated from field: bool active = 4;
+   */
+  active: boolean;
+};
+
+/**
+ * Describes the message multiplayer.v1.ItemState.
+ * Use `create(ItemStateSchema)` to create a new message.
+ */
+export declare const ItemStateSchema: GenMessage<ItemState>;
+
+/**
+ * @generated from message multiplayer.v1.TileCoord
+ */
+export declare type TileCoord = Message<"multiplayer.v1.TileCoord"> & {
+  /**
+   * @generated from field: int32 x = 1;
+   */
+  x: number;
+
+  /**
+   * @generated from field: int32 y = 2;
+   */
+  y: number;
+};
+
+/**
+ * Describes the message multiplayer.v1.TileCoord.
+ * Use `create(TileCoordSchema)` to create a new message.
+ */
+export declare const TileCoordSchema: GenMessage<TileCoord>;
+
+/**
+ * @generated from message multiplayer.v1.QuicksandEvent
+ */
+export declare type QuicksandEvent = Message<"multiplayer.v1.QuicksandEvent"> & {
+  /**
+   * @generated from field: repeated multiplayer.v1.TileCoord tiles = 1;
+   */
+  tiles: TileCoord[];
+
+  /**
+   * @generated from field: float expires_at = 2;
+   */
+  expiresAt: number;
+
+  /**
+   * @generated from field: int32 tile_id = 3;
+   */
+  tileId: number;
+};
+
+/**
+ * Describes the message multiplayer.v1.QuicksandEvent.
+ * Use `create(QuicksandEventSchema)` to create a new message.
+ */
+export declare const QuicksandEventSchema: GenMessage<QuicksandEvent>;
 
 /**
  * Lobby state showing connected users and in-game players
@@ -353,4 +451,24 @@ export enum ProjectileType {
  * Describes the enum multiplayer.v1.ProjectileType.
  */
 export declare const ProjectileTypeSchema: GenEnum<ProjectileType>;
+
+/**
+ * @generated from enum multiplayer.v1.ItemType
+ */
+export enum ItemType {
+  /**
+   * @generated from enum value: ITEM_TYPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ITEM_TYPE_ALOE = 1;
+   */
+  ALOE = 1,
+}
+
+/**
+ * Describes the enum multiplayer.v1.ItemType.
+ */
+export declare const ItemTypeSchema: GenEnum<ItemType>;
 
