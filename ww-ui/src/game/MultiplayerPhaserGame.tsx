@@ -633,7 +633,7 @@ const MultiplayerPhaserGame = ({
 
       {/* Chat UI */}
       <div className={styles.chatContainer}>
-        <span className={styles.chatUsername}>{gameStats.username}:</span>
+        <span className={styles.chatUsername}>{gameStats.username}</span>
         <div className={styles.chatBox}>
           <div className={styles.chatMessages}>
             {chatMessages.length > 0 ? (

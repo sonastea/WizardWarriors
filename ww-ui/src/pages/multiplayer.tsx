@@ -66,6 +66,17 @@ const MultiplayerPage: NextPage = () => {
     sessionStorage.removeItem("isGuest");
   }, []);
 
+  // Validate session to get user info for authenticated users
+  const sessionValidationQuery = useQuery({
+    queryKey: ["session"],
+    queryFn: async () => {
+      if (!apiService) throw new Error("API service not available");
+      return apiService.validateSession();
+    },
+    enabled: !!apiService && !isLeaving,
+    retry: false,
+  });
+
   // Join multiplayer - this handles both authenticated and guest users
   const joinMultiplayerQuery = useQuery({
     queryKey: ["multiplayer"],
@@ -78,6 +89,27 @@ const MultiplayerPage: NextPage = () => {
     enabled: !!apiService && !token && !isLeaving,
     retry: false,
   });
+
+  // Set gameStats for authenticated users when session is validated
+  useEffect(() => {
+    if (
+      sessionValidationQuery.isSuccess &&
+      sessionValidationQuery.data?.success
+    ) {
+      const userInfo = sessionValidationQuery.data.data;
+      if (userInfo) {
+        setGameStats((prev) => ({
+          ...prev,
+          user_id: userInfo.id,
+          username: userInfo.username,
+        }));
+      }
+    }
+  }, [
+    sessionValidationQuery.isSuccess,
+    sessionValidationQuery.data,
+    setGameStats,
+  ]);
 
   // Handle join multiplayer result
   useEffect(() => {
