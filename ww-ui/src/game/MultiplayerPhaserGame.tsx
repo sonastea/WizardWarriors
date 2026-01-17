@@ -21,6 +21,7 @@ import { useAtomValue } from "jotai";
 import Phaser, { Types } from "phaser";
 import { RefObject, useCallback, useEffect, useRef, useState } from "react";
 import LoginModal from "src/components/LoginModal";
+import TileIcon from "src/components/TileIcon";
 import { gameStatsAtom } from "src/state";
 import { EventBus } from "./EventBus";
 import styles from "./MultiplayerPhaserGame.module.css";
@@ -628,6 +629,294 @@ const MultiplayerPhaserGame = ({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {!isReady && isConnected && (
+        <div className={styles.howToPlayContainer}>
+          <div className={styles.howToPlayTitle}>How to Play</div>
+          <div className={styles.howToPlaySection}>
+            <div className={styles.howToPlaySectionTitle}>Controls</div>
+            <div className={styles.legendList}>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <span className={styles.keybindKeyboard}>
+                    <span className={styles.keybindKeyboardRow}>
+                      <span className={styles.keybindKey}>W</span>
+                    </span>
+                    <span className={styles.keybindKeyboardRow}>
+                      <span className={styles.keybindKey}>A</span>
+                      <span className={styles.keybindKey}>S</span>
+                      <span className={styles.keybindKey}>D</span>
+                    </span>
+                  </span>
+                </span>
+                <span className={styles.legendLabel}>Movement</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <span className={styles.keybindKeyboard}>
+                    <span className={styles.keybindKeyboardRow}>
+                      <span className={styles.keybindKey}>↑</span>
+                    </span>
+                    <span className={styles.keybindKeyboardRow}>
+                      <span className={styles.keybindKey}>←</span>
+                      <span className={styles.keybindKey}>↓</span>
+                      <span className={styles.keybindKey}>→</span>
+                    </span>
+                  </span>
+                </span>
+                <span className={styles.legendLabel}>Movement</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <span className={styles.keybindKeyMouse}>Right Click</span>
+                </span>
+                <span className={styles.legendLabel}>Throw Potion</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <span className={styles.keybindKey}>Enter</span>
+                </span>
+                <span className={styles.legendLabel}>Open Chat</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.howToPlaySection}>
+            <div className={styles.howToPlaySectionTitle}>Obstacles</div>
+            <div className={styles.legendList}>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={54}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={55}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={56}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={57}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+                <span className={styles.legendLabel}>Cactus</span>
+                <span className={styles.legendEffect}>Blocks movement</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={58}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={59}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={60}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+                <span className={styles.legendLabel}>Rocks</span>
+                <span className={styles.legendEffect}>Blocks movement</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={164}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={165}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={166}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={181}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={182}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={183}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+                <span className={styles.legendLabel}>Water</span>
+                <span className={styles.legendEffect}>Blocks movement</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={198}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={199}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={200}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={237}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+                <span className={styles.legendLabel}>Quicksand</span>
+                <span className={styles.legendEffect}>Slows movement</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.howToPlaySection}>
+            <div className={styles.howToPlaySectionTitle}>Terrain</div>
+            <div className={styles.legendList}>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <span className={styles.legendTileGroup}>
+                    <TileIcon
+                      spritesheet="/assets/DesertTilemap.png"
+                      frame={0}
+                      size={16}
+                      className={styles.legendTileIcon}
+                    />
+                    <TileIcon
+                      spritesheet="/assets/DesertTilemap.png"
+                      frame={1}
+                      size={16}
+                      className={styles.legendTileIcon}
+                    />
+                    <TileIcon
+                      spritesheet="/assets/DesertTilemap.png"
+                      frame={2}
+                      size={16}
+                      className={styles.legendTileIcon}
+                    />
+                  </span>
+                </span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={17}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={18}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={19}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+                <span className={styles.legendLabel}>Ground</span>
+                <span className={styles.legendEffect}>Decoration</span>
+              </div>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={34}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={35}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                  <TileIcon
+                    spritesheet="/assets/DesertTilemap.png"
+                    frame={36}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.howToPlaySection}>
+            <div className={styles.howToPlaySectionTitle}>Collectibles</div>
+            <div className={styles.legendList}>
+              <div className={styles.legendRow}>
+                <span className={styles.legendTileGroup}>
+                  <TileIcon
+                    spritesheet="/assets/MultiplayerSpriteSheet.png"
+                    frame={65}
+                    columns={16}
+                    size={16}
+                    className={styles.legendTileIcon}
+                  />
+                </span>
+                <span className={styles.legendLabel}>Aloe</span>
+                <span className={styles.legendEffect}>Speed boost</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

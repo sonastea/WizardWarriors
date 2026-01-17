@@ -112,7 +112,9 @@
   color: #9ca3af;
   font-size: 12px;
   cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
 }
 
 .refreshButton:hover {
@@ -334,4 +336,250 @@
 .chatSendButton:disabled {
   background-color: #666;
   cursor: not-allowed;
+}
+
+.howToPlayContainer {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  background-color: rgba(15, 23, 42, 0.92);
+  padding: 16px 20px;
+  border-radius: 4px;
+  color: #e2e8f0;
+  z-index: 100;
+  min-width: 220px;
+  max-width: 320px;
+  border-left: 2px solid #60a5fa;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.howToPlayTitle {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #60a5fa;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #374151;
+}
+
+.howToPlaySection {
+  margin-bottom: 14px;
+}
+
+.howToPlaySection:last-child {
+  margin-bottom: 0;
+}
+
+.howToPlaySectionTitle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.keybindKey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background-color: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #e2e8f0;
+  text-transform: uppercase;
+}
+
+.keybindKeyMouse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 6px;
+  background-color: #5d3fd3;
+  border: 1px solid #7c5fd6;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.keybindKeyboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.keybindKeyboardRow {
+  display: flex;
+  gap: 2px;
+}
+
+.legendList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendIcon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legendTileIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  image-rendering: pixelated;
+}
+
+.legendTileGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  font-size: 11px;
+  color: #e2e8f0;
+  min-width: 65px;
+}
+
+.legendEffect {
+  font-size: 10px;
+  color: #6b7280;
+  font-style: italic;
+  margin-left: auto;
+  text-align: right;
+}
+
+@media (max-width: 1200px) {
+  .howToPlayContainer {
+    left: 10px;
+    padding: 12px 16px;
+    min-width: 200px;
+    max-width: 280px;
+  }
+
+  .howToPlayTitle {
+    font-size: 11px;
+    margin-bottom: 12px;
+  }
+
+  .howToPlaySection {
+    margin-bottom: 12px;
+  }
+
+  .legendTileGroup {
+    width: 65px;
+  }
+
+  .legendLabel {
+    min-width: 55px;
+    font-size: 10px;
+  }
+
+  .legendEffect {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 900px) {
+  .howToPlayContainer {
+    position: absolute;
+    top: auto;
+    bottom: 80px;
+    left: 10px;
+    transform: none;
+    max-height: 50vh;
+  }
+
+  .chatContainer {
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .chatBox {
+    width: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .howToPlayContainer {
+    left: 5px;
+    right: 5px;
+    bottom: 70px;
+    max-width: none;
+    min-width: auto;
+    padding: 10px 12px;
+  }
+
+  .legendRow {
+    gap: 6px;
+  }
+
+  .legendList {
+    gap: 4px;
+  }
+
+  .howToPlaySection {
+    margin-bottom: 10px;
+  }
+
+  .legendEffect {
+    display: none;
+  }
+
+  .lobbyOverlay {
+    min-width: 300px;
+    padding: 16px 20px;
+  }
+
+  .chatBox {
+    width: 200px;
+  }
+
+  .chatMessages {
+    max-height: 120px;
+  }
+}
+
+@media (max-height: 600px) {
+  .howToPlayContainer {
+    max-height: 40vh;
+    padding: 10px 14px;
+  }
+
+  .howToPlaySection {
+    margin-bottom: 8px;
+  }
+
+  .legendList {
+    gap: 3px;
+  }
+
+  .howToPlaySectionTitle {
+    margin-bottom: 4px;
+    font-size: 9px;
+  }
 }
