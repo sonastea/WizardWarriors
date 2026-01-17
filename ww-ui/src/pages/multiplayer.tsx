@@ -6,6 +6,7 @@ import { useRouter } from "next/router";
 import { NextPage } from "next/types";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { gameStatsAtom } from "src/state";
+import { preloadUISounds } from "../game/audio/UISounds";
 import styles from "../styles/index.module.css";
 import mpStyles from "../styles/multiplayer.module.css";
 
@@ -23,6 +24,10 @@ const MultiplayerPage: NextPage = () => {
   const [guestId, setGuestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
+
+  useEffect(() => {
+    preloadUISounds();
+  }, []);
 
   // Clear multiplayer session data
   const clearMultiplayerSession = useCallback(() => {
