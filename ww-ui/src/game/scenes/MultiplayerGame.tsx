@@ -836,6 +836,11 @@ export default class MultiplayerGameScene extends Scene {
     if (frozen) {
       playerData.sprite.setTint(0x88ccff);
 
+      if (playerData.currentAnimationKey !== "multiplayer-idle") {
+        playerData.sprite.play("multiplayer-idle", true);
+        playerData.currentAnimationKey = "multiplayer-idle";
+      }
+
       if (!playerData.frozenParticles) {
         playerData.frozenParticles = this.add.particles(
           playerData.sprite.x,

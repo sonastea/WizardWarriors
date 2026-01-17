@@ -33,6 +33,7 @@ type Hub struct {
 	pubsub           *PubSub
 	pubsubEnabled    bool
 	gameStateManager *GameStateManager
+	botManager       *BotManager
 }
 
 func New(cfg *config.Config) (*Hub, error) {
@@ -56,6 +57,8 @@ func New(cfg *config.Config) (*Hub, error) {
 	hub.redis.Del(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers, "lobby:usernames")
 
 	if !cfg.IsAPIServer {
+		// Clean up bot keys only on game server startup
+		hub.redis.Del(ctx, RedisKeyBotGame, RedisKeyBotNames)
 		gameMap, err := LoadMapFromFile(cfg.MapPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load game map: %w", err)
@@ -65,6 +68,13 @@ func New(cfg *config.Config) (*Hub, error) {
 
 		// Initialize game state manager with 30ms tick rate (33 updates/sec)
 		hub.gameStateManager = NewGameStateManager(hub, gameMap, 30*time.Millisecond)
+
+		// Initialize bot manager and spawn bots
+		hub.botManager = NewBotManager(hub.redis, hub.gameStateManager, gameMap)
+		if err := hub.botManager.Initialize(ctx); err != nil {
+			logger.Error("Failed to initialize bots: %v", err)
+		}
+
 		hub.gameStateManager.Start()
 	}
 
@@ -212,6 +222,15 @@ func (hub *Hub) MoveUserToLobby(userId string) error {
 
 // broadcastLobbyState sends the current lobby and game user state to all clients
 func (hub *Hub) broadcastLobbyState() {
+	// Skip if no clients connected
+	hub.clientsMu.RLock()
+	clientCount := len(hub.clients)
+	hub.clientsMu.RUnlock()
+	if clientCount == 0 {
+		return
+	}
+
+	logger.Info("broadcastLobbyState: broadcasting to %d clients (pubsub=%v, botMgr=%v)", clientCount, hub.pubsubEnabled, hub.botManager != nil)
 	ctx := context.Background()
 
 	// Get lobby and game users from Redis
@@ -234,7 +253,7 @@ func (hub *Hub) broadcastLobbyState() {
 		usernames = make(map[string]string)
 	}
 
-	// Build lobby user list
+	// Build lobby user list (humans only)
 	lobbyUsers := make([]*multiplayerv1.LobbyUser, 0, len(lobbyUserIds))
 	for _, id := range lobbyUserIds {
 		username := usernames[id]
@@ -248,8 +267,8 @@ func (hub *Hub) broadcastLobbyState() {
 		})
 	}
 
-	// Build game user list
-	gameUsers := make([]*multiplayerv1.LobbyUser, 0, len(gameUserIds))
+	// Build game user list (humans + bots)
+	gameUsers := make([]*multiplayerv1.LobbyUser, 0, len(gameUserIds)+BotCount)
 	for _, id := range gameUserIds {
 		username := usernames[id]
 		if username == "" {
@@ -262,10 +281,36 @@ func (hub *Hub) broadcastLobbyState() {
 		})
 	}
 
+	// Add bots to game user list (read from Redis so both API and game servers see them)
+	botIDs, err := hub.redis.SMembers(ctx, RedisKeyBotGame).Result()
+	if err != nil {
+		logger.Error("Failed to get bot IDs from Redis: %v", err)
+		botIDs = []string{}
+	}
+	botNames, err := hub.redis.HGetAll(ctx, RedisKeyBotNames).Result()
+	if err != nil {
+		logger.Error("Failed to get bot names from Redis: %v", err)
+		botNames = make(map[string]string)
+	}
+	logger.Info("broadcastLobbyState: adding %d bots to game users", len(botIDs))
+	for _, botID := range botIDs {
+		name := botNames[botID]
+		if name == "" {
+			name = "Bot"
+		}
+		gameUsers = append(gameUsers, &multiplayerv1.LobbyUser{
+			UserId:  &multiplayerv1.ID{Value: botID},
+			Name:    name,
+			IsReady: true,
+		})
+	}
+
 	lobbyState := &multiplayerv1.LobbyState{
 		LobbyUsers: lobbyUsers,
 		GameUsers:  gameUsers,
 	}
+
+	logger.Info("broadcastLobbyState: lobbyUsers=%d, gameUsers=%d", len(lobbyUsers), len(gameUsers))
 
 	gameMsg := &multiplayerv1.GameMessage{
 		Type: multiplayerv1.GameMessageType_GAME_MESSAGE_TYPE_LOBBY_STATE,
@@ -273,9 +318,11 @@ func (hub *Hub) broadcastLobbyState() {
 			LobbyState: lobbyState,
 		},
 	}
+	logger.Debug("broadcastLobbyState: sent %+v", gameMsg)
 
 	wire, err := proto.Marshal(gameMsg)
 	if err != nil {
+		logger.Error("broadcastLobbyState: failed to marshal: %v", err)
 		return
 	}
 
