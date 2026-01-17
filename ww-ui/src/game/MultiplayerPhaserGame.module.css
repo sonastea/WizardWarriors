@@ -474,7 +474,6 @@
   text-align: right;
 }
 
-
 @media (max-width: 1200px) {
   .howToPlayContainer {
     left: 10px;
@@ -562,7 +561,7 @@
   }
 
   .legendTileGroup {
-    width: 56px;
+    width: 5rem;
   }
 
   .lobbyOverlay {
@@ -571,11 +570,11 @@
   }
 
   .chatBox {
-    width: 200px;
+    width: 12.5rem;
   }
 
   .chatMessages {
-    max-height: 120px;
+    max-height: 7.5rem;
   }
 }
 

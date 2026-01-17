@@ -44,6 +44,7 @@ interface MultiplayerPlayerData {
   lastDirection: string;
   currentAnimationKey: string;
   isEnemy: boolean;
+  isBot: boolean;
   isFrozen: boolean;
   aloeCount: number;
   speedBoostUntil: number;
@@ -116,7 +117,8 @@ export default class MultiplayerGameScene extends Scene {
   private createPlayerSprite(
     x: number,
     y: number,
-    isEnemy: boolean
+    isEnemy: boolean,
+    isBot: boolean = false
   ): MultiplayerPlayerData {
     const sprite = this.add.sprite(x, y, "multiplayer-sheet");
     sprite.setScale(2);
@@ -127,7 +129,11 @@ export default class MultiplayerGameScene extends Scene {
     if (isEnemy) {
       indicator = this.add.graphics();
       indicator.setDepth(11);
-      this.drawEnemyIndicator(indicator, sprite.x, sprite.y);
+      if (isBot) {
+        this.drawBotIndicator(indicator, sprite.x, sprite.y);
+      } else {
+        this.drawEnemyIndicator(indicator, sprite.x, sprite.y);
+      }
     }
 
     sprite.play("multiplayer-idle", true);
@@ -138,6 +144,7 @@ export default class MultiplayerGameScene extends Scene {
       lastDirection: "down",
       currentAnimationKey: "multiplayer-idle",
       isEnemy,
+      isBot,
       isFrozen: false,
       aloeCount: 0,
       speedBoostUntil: 0,
@@ -163,6 +170,21 @@ export default class MultiplayerGameScene extends Scene {
     graphics.fillPath();
   }
 
+  private drawBotIndicator(
+    graphics: GameObjects.Graphics,
+    x: number,
+    y: number
+  ): void {
+    graphics.clear();
+
+    const boxSize = 5;
+    const offsetY = -26;
+    const halfSize = boxSize / 2;
+
+    graphics.fillStyle(0x00b4ff, 0.9);
+    graphics.fillRect(x - halfSize, y + offsetY - halfSize, boxSize, boxSize);
+  }
+
   private updatePlayerAnimation(
     playerData: MultiplayerPlayerData,
     moving: boolean,
@@ -184,6 +206,10 @@ export default class MultiplayerGameScene extends Scene {
         playerData.currentAnimationKey = "multiplayer-idle";
       }
     }
+  }
+
+  private isBotPlayerId(playerId: string): boolean {
+    return playerId.startsWith("bot-") || playerId.startsWith("Bot");
   }
 
   create() {
@@ -562,7 +588,8 @@ export default class MultiplayerGameScene extends Scene {
     if (data.playerId === this.localPlayerId) return;
     if (this.players.has(data.playerId)) return;
 
-    const playerData = this.createPlayerSprite(data.x, data.y, true);
+    const isBot = this.isBotPlayerId(data.playerId);
+    const playerData = this.createPlayerSprite(data.x, data.y, true, isBot);
     playerData.sprite.setData("playerId", data.playerId);
     playerData.sprite.setVisible(true);
     this.players.set(data.playerId, playerData);
@@ -623,11 +650,19 @@ export default class MultiplayerGameScene extends Scene {
       }
 
       if (playerData.indicator) {
-        this.drawEnemyIndicator(
-          playerData.indicator,
-          playerData.sprite.x,
-          playerData.sprite.y
-        );
+        if (playerData.isBot) {
+          this.drawBotIndicator(
+            playerData.indicator,
+            playerData.sprite.x,
+            playerData.sprite.y
+          );
+        } else {
+          this.drawEnemyIndicator(
+            playerData.indicator,
+            playerData.sprite.x,
+            playerData.sprite.y
+          );
+        }
       }
 
       this.minimap?.updateOtherPlayerWithVisibility(
