@@ -970,7 +970,12 @@ export default class MultiplayerGameScene extends Scene {
           // Create lively cold explosion effect
           this.createExplosionEffect(state.position.x, state.position.y);
 
-          this.soundManager?.play(SoundKeys.POTION_EXPLODE);
+          // Play explosion sound with distance-based volume (only audible within player's view)
+          this.soundManager?.playAtPosition(
+            SoundKeys.POTION_EXPLODE,
+            state.position.x,
+            state.position.y
+          );
 
           this.time.delayedCall(300, () => {
             projectileData.sprite.destroy();

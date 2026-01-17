@@ -33,12 +33,25 @@ interface SoundConfig {
  *
  * Supported formats: mp3, ogg, wav
  */
+/**
+ * Configuration for spatial audio playback
+ */
+interface SpatialConfig {
+  /** Maximum distance at which the sound is still audible */
+  maxDistance?: number;
+  /** Distance at which the sound starts to fade (default: 0) */
+  minDistance?: number;
+}
+
 export class SoundManager {
   private scene: Scene;
   private masterVolume: number = 0.5;
   private soundEnabled: boolean = true;
   private footstepPlaying: boolean = false;
   private footstepInterval: number | null = null;
+
+  /** Multiplier applied to viewport diagonal for max audible distance (1.0 = screen corner) */
+  private readonly VIEWPORT_DISTANCE_MULTIPLIER = 1.0;
 
   private soundConfigs: Record<SoundKey, SoundConfig> = {
     [SoundKeys.POTION_THROW]: { volume: 0.6, loop: false },
@@ -105,6 +118,85 @@ export class SoundManager {
       rate: config.rate ?? 1,
       loop: config.loop ?? false,
     });
+  }
+
+  /**
+   * Calculate the viewport radius (distance from center to corner of the camera view)
+   */
+  private getViewportRadius(): number {
+    const camera = this.scene.cameras.main;
+    if (!camera) return 400; // Fallback default
+
+    // Use half the diagonal of the viewport as the base radius
+    return Math.sqrt(
+      Math.pow(camera.width / 2, 2) + Math.pow(camera.height / 2, 2)
+    );
+  }
+
+  /**
+   * Play a sound effect at a specific world position.
+   * The volume will be adjusted based on distance from the camera center (player's view).
+   * Sounds outside the viewport radius (with multiplier) will not play at all.
+   *
+   * @param soundKey - The sound to play
+   * @param worldX - X position in world coordinates where the sound originates
+   * @param worldY - Y position in world coordinates where the sound originates
+   * @param spatialConfig - Optional configuration for distance falloff
+   * @param configOverride - Optional sound config overrides
+   */
+  public playAtPosition(
+    soundKey: SoundKey,
+    worldX: number,
+    worldY: number,
+    spatialConfig?: SpatialConfig,
+    configOverride?: SoundConfig
+  ): void {
+    if (!this.soundEnabled) return;
+
+    const camera = this.scene.cameras.main;
+    if (!camera) {
+      // Fallback to regular play if no camera
+      this.play(soundKey, configOverride);
+      return;
+    }
+
+    // Get the center of the camera (player's view center)
+    const cameraX = camera.scrollX + camera.width / 2;
+    const cameraY = camera.scrollY + camera.height / 2;
+
+    // Calculate distance from camera center to sound position
+    const distance = Phaser.Math.Distance.Between(
+      cameraX,
+      cameraY,
+      worldX,
+      worldY
+    );
+
+    // Default max distance is based on viewport radius
+    const viewportRadius = this.getViewportRadius();
+    const maxDistance =
+      spatialConfig?.maxDistance ??
+      viewportRadius * this.VIEWPORT_DISTANCE_MULTIPLIER;
+    const minDistance = spatialConfig?.minDistance ?? 0;
+
+    // Don't play if outside max distance
+    if (distance > maxDistance) {
+      return;
+    }
+
+    // Calculate volume falloff (1.0 at minDistance, 0.0 at maxDistance)
+    let volumeMultiplier = 1.0;
+    if (distance > minDistance) {
+      const falloffRange = maxDistance - minDistance;
+      const falloffDistance = distance - minDistance;
+      volumeMultiplier = 1 - falloffDistance / falloffRange;
+    }
+
+    // Apply volume multiplier via config override
+    const config = { ...this.soundConfigs[soundKey], ...configOverride };
+    const adjustedVolume = (config.volume ?? 1) * volumeMultiplier;
+
+    this.play(soundKey, { ...configOverride, volume: adjustedVolume });
   }
 
   /**
