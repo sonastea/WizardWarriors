@@ -14,18 +14,20 @@ import (
 )
 
 const (
-	BotCount            = 5
-	BotPathUpdateMs     = 500  // Recompute path every 500ms (slower reactions)
-	BotPotionCooldownMs = 1000 // Potion cooldown (can throw more frequently)
-	BotPotionRange      = 130.0
-	BotDetectionRange   = 400.0 // Range to detect and chase targets
-	BotRoamInterval     = 2000  // Pick new roam target every 3 seconds
-	BotAloeSearchRange  = 400.0 // Range to search for aloe when roaming
-	BotMinSeparation    = 250.0 // Minimum distance bots try to keep from each other when roaming
-	BotSkirmishChance   = 0.25  // 25% chance to target other bot when no humans nearby
-	RedisKeyBotGame     = "bot:game"
-	RedisKeyBotNames    = "bot:usernames"
-	RedisKeyBotNamePool = "bot:names"
+	BotCount             = 5
+	BotPathUpdateMs      = 500  // Recompute path every 500ms (slower reactions)
+	BotPotionCooldownMs  = 1000 // Potion cooldown (can throw more frequently)
+	BotPotionRange       = 130.0
+	BotDetectionRange    = 400.0 // Range to detect and chase targets
+	BotRoamInterval      = 2000  // Pick new roam target every 2 seconds
+	BotAloeSearchRange   = 400.0 // Range to search for aloe when roaming
+	BotMinSeparation     = 250.0 // Minimum distance bots try to keep from each other when roaming
+	BotClusterThreshold  = 200.0 // If this close to 2+ bots, consider dispersing
+	BotSkirmishChance    = 0.20  // 20% chance to target other bot when no humans nearby
+	BotLongRangeSkirmish = 0.15  // 15% chance to seek out distant bot across the map
+	RedisKeyBotGame      = "bot:game"
+	RedisKeyBotNames     = "bot:usernames"
+	RedisKeyBotNamePool  = "bot:names"
 )
 
 // BotState holds bot-specific state beyond PlayerState
@@ -177,13 +179,29 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 			continue
 		}
 
-		// If current target is frozen, clear it so we find a new one
+		// If current target is frozen, clear it and immediately pick a new roam destination
 		if bot.TargetID != "" {
 			if targetPlayer, exists := players[bot.TargetID]; exists && targetPlayer.IsFrozen {
 				bot.TargetID = ""
-				bot.Path = nil
+				bot.IsRoaming = true
+				bot.SeekingAloe = false
+				// Immediately pick a new destination away from frozen target
+				bm.pickSmartRoamTarget(bot, botID, players)
+				bot.Path = bm.computePath(player.X, player.Y, bot.RoamTargetX, bot.RoamTargetY)
 				bot.PathIndex = 0
+				bot.LastPathUpdate = now
+				bot.LastRoamUpdate = now
 			}
+		}
+
+		// Check if bot is in a cluster (too close to multiple other bots), disperse if so
+		if bot.IsRoaming && bm.isInCluster(botID, players) {
+			bm.pickSmartRoamTarget(bot, botID, players)
+			bot.SeekingAloe = false
+			bot.Path = bm.computePath(player.X, player.Y, bot.RoamTargetX, bot.RoamTargetY)
+			bot.PathIndex = 0
+			bot.LastPathUpdate = now
+			bot.LastRoamUpdate = now
 		}
 
 		// Find target within detection range, considering already claimed targets
@@ -227,9 +245,24 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 			bot.IsRoaming = true
 
 			// Occasionally decide to target another bot for a skirmish (makes map feel lively)
-			if rand.Float32() < BotSkirmishChance {
+			skirmishRoll := rand.Float32()
+			if skirmishRoll < BotSkirmishChance {
+				// Try nearby skirmish first
 				skirmishTarget, sx, sy, sDist := bm.findNearestBot(botID, players)
 				if skirmishTarget != "" && sDist <= BotDetectionRange*1.5 {
+					bot.TargetID = skirmishTarget
+					bot.IsRoaming = false
+					bot.SeekingAloe = false
+					bot.Path = bm.computePath(player.X, player.Y, sx, sy)
+					bot.PathIndex = 0
+					bot.LastPathUpdate = now
+					bm.followPath(bot, player)
+					continue
+				}
+			} else if skirmishRoll < BotSkirmishChance+BotLongRangeSkirmish {
+				// Long-range skirmish: find any bot on the map (even far away)
+				skirmishTarget, sx, sy, _ := bm.findFarthestBot(botID, players)
+				if skirmishTarget != "" {
 					bot.TargetID = skirmishTarget
 					bot.IsRoaming = false
 					bot.SeekingAloe = false
@@ -416,6 +449,64 @@ func (bm *BotManager) findNearestBot(botID string, players map[string]*PlayerSta
 		return nearestID, p.X, p.Y, nearestDist
 	}
 	return "", 0, 0, 0
+}
+
+// findFarthestBot finds the farthest bot (for long-range skirmishes to spread action across map)
+func (bm *BotManager) findFarthestBot(botID string, players map[string]*PlayerState) (string, float32, float32, float32) {
+	botPlayer, exists := players[botID]
+	if !exists {
+		return "", 0, 0, 0
+	}
+
+	var farthestID string
+	var farthestDist float32 = 0
+
+	for otherID := range bm.bots {
+		if otherID == botID {
+			continue
+		}
+		if otherPlayer, exists := players[otherID]; exists {
+			// Skip frozen bots
+			if otherPlayer.IsFrozen {
+				continue
+			}
+			dist := distance(botPlayer.X, botPlayer.Y, otherPlayer.X, otherPlayer.Y)
+			if dist > farthestDist {
+				farthestDist = dist
+				farthestID = otherID
+			}
+		}
+	}
+
+	if farthestID != "" {
+		p := players[farthestID]
+		return farthestID, p.X, p.Y, farthestDist
+	}
+	return "", 0, 0, 0
+}
+
+// isInCluster returns true if the bot is close to 2+ other bots (should disperse)
+func (bm *BotManager) isInCluster(botID string, players map[string]*PlayerState) bool {
+	botPlayer, exists := players[botID]
+	if !exists {
+		return false
+	}
+
+	nearbyCount := 0
+	for otherID := range bm.bots {
+		if otherID == botID {
+			continue
+		}
+		if otherPlayer, exists := players[otherID]; exists {
+			dist := distance(botPlayer.X, botPlayer.Y, otherPlayer.X, otherPlayer.Y)
+			if dist < BotClusterThreshold {
+				nearbyCount++
+			}
+		}
+	}
+
+	// In a cluster if 2+ bots are very close
+	return nearbyCount >= 2
 }
 
 // findBestTarget finds the best target for a bot, avoiding targets already claimed by other bots
