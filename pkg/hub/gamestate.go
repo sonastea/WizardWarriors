@@ -366,62 +366,69 @@ func (gsm *GameStateManager) Start() {
 
 // tick runs the game simulation and broadcasts state
 func (gsm *GameStateManager) tick() {
+	now := time.Now()
+	_, botActions := gsm.updateGameState(now)
+
+	// Execute bot actions after releasing lock (avoids deadlock)
+	gsm.executeBotActions(botActions)
+
+	// Broadcast to clients if any are connected
+	if gsm.hasConnectedClients() && len(gsm.players) > 0 {
+		gsm.broadcastGameState(now)
+	}
+
+	gsm.projectileManager.CleanupInactiveProjectiles()
+}
+
+// updateGameState runs all game simulation logic and returns bot actions to execute
+func (gsm *GameStateManager) updateGameState(now time.Time) (float32, []BotAction) {
 	gsm.mu.Lock()
+	defer gsm.mu.Unlock()
 
 	// Calculate delta time since last tick
-	now := time.Now()
 	deltaSeconds := float32(now.Sub(gsm.lastTick).Seconds())
 	gsm.lastTick = now
 
-	// Update freeze states (unfreeze expired)
+	// Update game systems
 	gsm.updateFreezeStates()
 	gsm.updateQuicksandEvent(now)
 	gsm.itemManager.Update(now, gsm.players)
 
-	// Update projectiles
-	gsm.projectileManager.Update(deltaSeconds, gsm.players)
+	// Update bot AI (always runs, even with no human clients)
+	var botActions []BotAction
+	if gsm.hub.botManager != nil {
+		botActions = gsm.hub.botManager.Update(now, gsm.players)
+	}
 
-	// Simulate all player movement based on their inputs
+	// Update projectiles and movement
+	gsm.projectileManager.Update(deltaSeconds, gsm.players)
 	gsm.simulateMovement(deltaSeconds, now)
 
-	// Skip broadcast if no players
-	if len(gsm.players) == 0 {
-		gsm.mu.Unlock()
-		return
+	return deltaSeconds, botActions
+}
+
+// executeBotActions spawns projectiles for bot actions (must be called after releasing gsm.mu)
+func (gsm *GameStateManager) executeBotActions(actions []BotAction) {
+	for _, action := range actions {
+		gsm.SpawnFreezePotion(action.BotID, action.TargetX, action.TargetY)
 	}
+}
 
-	// Build game state message
-	playerStates := make([]*multiplayerv1.PlayerState, 0, len(gsm.players))
-	for _, player := range gsm.players {
-		frozenUntilUnix := float32(0)
-		if player.IsFrozen {
-			frozenUntilUnix = float32(player.FrozenUntil.Unix())
-		}
+// hasConnectedClients returns true if there are any connected WebSocket clients
+func (gsm *GameStateManager) hasConnectedClients() bool {
+	gsm.hub.clientsMu.RLock()
+	defer gsm.hub.clientsMu.RUnlock()
+	return len(gsm.hub.clients) > 0
+}
 
-		speedBoostUntilUnix := float32(0)
-		if now.Before(player.SpeedBoostUntil) {
-			speedBoostUntilUnix = float32(player.SpeedBoostUntil.Unix())
-		}
-
-		playerStates = append(playerStates, &multiplayerv1.PlayerState{
-			PlayerId: &multiplayerv1.ID{Value: player.UserID},
-			Position: &multiplayerv1.Vector2{
-				X: player.X,
-				Y: player.Y,
-			},
-			IsFrozen:        player.IsFrozen,
-			FrozenUntil:     frozenUntilUnix,
-			AloeCount:       int32(player.AloeCount),
-			SpeedBoostUntil: speedBoostUntilUnix,
-		})
-	}
-
-	// Get projectile states
+// broadcastGameState builds and sends the current game state to all clients
+func (gsm *GameStateManager) broadcastGameState(now time.Time) {
+	gsm.mu.RLock()
+	playerStates := gsm.buildPlayerStates(now)
 	projectileStates := gsm.projectileManager.GetActiveProjectiles()
 	itemStates := gsm.itemManager.GetActiveItems()
 	quicksandEvent := gsm.getQuicksandEventState()
-
-	gsm.mu.Unlock()
+	gsm.mu.RUnlock()
 
 	gameState := &multiplayerv1.GameState{
 		Players:        playerStates,
@@ -439,10 +446,37 @@ func (gsm *GameStateManager) tick() {
 
 	wire, err := proto.Marshal(gameMsg)
 	if err != nil {
+		logger.Error("Failed to marshal game state: %v", err)
 		return
 	}
 
 	gsm.hub.broadcastToClients(wire)
+}
 
-	gsm.projectileManager.CleanupInactiveProjectiles()
+// buildPlayerStates converts internal player state to protobuf format
+func (gsm *GameStateManager) buildPlayerStates(now time.Time) []*multiplayerv1.PlayerState {
+	states := make([]*multiplayerv1.PlayerState, 0, len(gsm.players))
+
+	for _, player := range gsm.players {
+		var frozenUntilUnix float32
+		if player.IsFrozen {
+			frozenUntilUnix = float32(player.FrozenUntil.Unix())
+		}
+
+		var speedBoostUntilUnix float32
+		if now.Before(player.SpeedBoostUntil) {
+			speedBoostUntilUnix = float32(player.SpeedBoostUntil.Unix())
+		}
+
+		states = append(states, &multiplayerv1.PlayerState{
+			PlayerId:        &multiplayerv1.ID{Value: player.UserID},
+			Position:        &multiplayerv1.Vector2{X: player.X, Y: player.Y},
+			IsFrozen:        player.IsFrozen,
+			FrozenUntil:     frozenUntilUnix,
+			AloeCount:       int32(player.AloeCount),
+			SpeedBoostUntil: speedBoostUntilUnix,
+		})
+	}
+
+	return states
 }
