@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	BotCount             = 5
+	BotCount             = 9
 	BotPathUpdateMs      = 500  // Recompute path every 500ms (slower reactions)
 	BotPotionCooldownMs  = 1000 // Potion cooldown (can throw more frequently)
 	BotPotionRange       = 130.0
@@ -25,6 +25,8 @@ const (
 	BotClusterThreshold  = 200.0 // If this close to 2+ bots, consider dispersing
 	BotSkirmishChance    = 0.20  // 20% chance to target other bot when no humans nearby
 	BotLongRangeSkirmish = 0.15  // 15% chance to seek out distant bot across the map
+	BotStuckThreshold    = 10    // Ticks without movement before considered stuck
+	BotStuckMoveMin      = 3.0   // Minimum movement per tick to not be considered stuck
 	RedisKeyBotGame      = "bot:game"
 	RedisKeyBotNames     = "bot:usernames"
 	RedisKeyBotNamePool  = "bot:names"
@@ -45,6 +47,9 @@ type BotState struct {
 	IsRoaming       bool
 	SeekingAloe     bool   // true if currently pathing to aloe
 	AloeTargetID    string // ID of aloe being targeted
+	LastX           float32
+	LastY           float32
+	StuckTicks      int // count of consecutive ticks with no movement
 }
 
 // BotManager manages bot lifecycle and AI
@@ -177,6 +182,30 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 			player.MoveLeft = false
 			player.MoveRight = false
 			continue
+		}
+
+		// Stuck detection, check if bot has barely moved since last tick
+		movedDist := distance(player.X, player.Y, bot.LastX, bot.LastY)
+		if movedDist < BotStuckMoveMin && (player.MoveUp || player.MoveDown || player.MoveLeft || player.MoveRight) {
+			bot.StuckTicks++
+		} else {
+			bot.StuckTicks = 0
+		}
+		bot.LastX = player.X
+		bot.LastY = player.Y
+
+		// If stuck for too long, force a new random roam target away from current position
+		if bot.StuckTicks >= BotStuckThreshold {
+			bot.StuckTicks = 0
+			bot.TargetID = ""
+			bot.IsRoaming = true
+			bot.SeekingAloe = false
+			bot.AloeTargetID = ""
+			bm.pickSmartRoamTarget(bot, botID, players)
+			bot.Path = bm.computePath(player.X, player.Y, bot.RoamTargetX, bot.RoamTargetY)
+			bot.PathIndex = 0
+			bot.LastPathUpdate = now
+			bot.LastRoamUpdate = now
 		}
 
 		// If current target is frozen, clear it and immediately pick a new roam destination
