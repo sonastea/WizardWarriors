@@ -62,6 +62,7 @@ interface ProjectileData {
 interface ItemData {
   sprite: GameObjects.Sprite;
   type: ItemType;
+  glimmerEmitter?: GameObjects.Particles.ParticleEmitter;
 }
 
 export default class MultiplayerGameScene extends Scene {
@@ -83,6 +84,7 @@ export default class MultiplayerGameScene extends Scene {
   private freezeParticleTexture: string = "freeze-particle";
   private explosionParticleTexture: string = "explosion-particle";
   private trailParticleTexture: string = "trail-particle";
+  private aloeGlimmerTexture: string = "aloe-glimmer";
   private soundManager: SoundManager | null = null;
 
   private collisionLayer: Tilemaps.TilemapLayer | null = null;
@@ -267,6 +269,7 @@ export default class MultiplayerGameScene extends Scene {
     this.createExplosionParticleTexture();
     this.createTrailParticleTexture();
     this.createSnowflakeTexture();
+    this.createAloeGlimmerTexture();
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) {
@@ -733,6 +736,26 @@ export default class MultiplayerGameScene extends Scene {
   }
 
   /**
+   * Generate a soft glimmer texture for aloe pickups
+   */
+  private createAloeGlimmerTexture(): void {
+    if (this.textures.exists(this.aloeGlimmerTexture)) {
+      return;
+    }
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(6, 6, 6);
+    graphics.fillStyle(0xfff9d6, 0.95);
+    graphics.fillCircle(6, 6, 4.5);
+    graphics.fillStyle(0xffffff, 0.9);
+    graphics.fillCircle(6, 6, 2);
+    graphics.generateTexture(this.aloeGlimmerTexture, 12, 12);
+    graphics.destroy();
+  }
+
+  /**
    * Create a frozen explosion effect - ice shards, snowflakes, and cold mist
    */
   private createExplosionEffect(x: number, y: number): void {
@@ -848,7 +871,7 @@ export default class MultiplayerGameScene extends Scene {
           this.freezeParticleTexture,
           {
             speed: { min: 10, max: 30 },
-            scale: { start: 0.5, end: 0 },
+            scale: { start: 0.95, end: 0 },
             alpha: { start: 0.8, end: 0 },
             lifespan: 800,
             frequency: 100,
@@ -1018,11 +1041,51 @@ export default class MultiplayerGameScene extends Scene {
         );
         sprite.setDepth(9);
 
+        const glimmerEmitter = this.add.particles(
+          0,
+          0,
+          this.aloeGlimmerTexture,
+          {
+            speed: { min: 8, max: 24 },
+            scale: { start: 0.5, end: 0 },
+            alpha: { start: 0.6, end: 0 },
+            lifespan: { min: 400, max: 750 },
+            frequency: 120,
+            quantity: 2,
+            angle: { min: 0, max: 360 },
+            follow: sprite,
+            tint: [0xffffff, 0xfff7d6, 0xfff1b0],
+            blendMode: Phaser.BlendModes.ADD,
+          }
+        );
+        glimmerEmitter.setDepth(8);
+
         itemData = {
           sprite,
           type: state.type,
+          glimmerEmitter,
         };
         this.items.set(state.itemId, itemData);
+      } else if (!itemData.glimmerEmitter) {
+        const glimmerEmitter = this.add.particles(
+          0,
+          0,
+          this.aloeGlimmerTexture,
+          {
+            speed: { min: 8, max: 24 },
+            scale: { start: 0.95, end: 0 },
+            alpha: { start: 0.9, end: 0 },
+            lifespan: { min: 400, max: 750 },
+            frequency: 120,
+            quantity: 2,
+            angle: { min: 0, max: 360 },
+            follow: itemData.sprite,
+            tint: [0xffffff, 0xfff7d6, 0xfff1b0],
+            blendMode: Phaser.BlendModes.ADD,
+          }
+        );
+        glimmerEmitter.setDepth(8);
+        itemData.glimmerEmitter = glimmerEmitter;
       }
 
       itemData.sprite.x = state.position.x;
@@ -1032,6 +1095,11 @@ export default class MultiplayerGameScene extends Scene {
 
     this.items.forEach((data, id) => {
       if (!activeIds.has(id)) {
+        if (data.glimmerEmitter) {
+          data.glimmerEmitter.stop();
+          data.glimmerEmitter.destroy();
+          data.glimmerEmitter = undefined;
+        }
         data.sprite.destroy();
         this.items.delete(id);
       }
@@ -1094,6 +1162,11 @@ export default class MultiplayerGameScene extends Scene {
     EventBus.removeListener("set-local-player-id");
 
     this.items.forEach((data) => {
+      if (data.glimmerEmitter) {
+        data.glimmerEmitter.stop();
+        data.glimmerEmitter.destroy();
+        data.glimmerEmitter = undefined;
+      }
       data.sprite.destroy();
     });
     this.items.clear();
