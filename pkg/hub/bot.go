@@ -14,42 +14,49 @@ import (
 )
 
 const (
-	BotCount             = 9
-	BotPathUpdateMs      = 500  // Recompute path every 500ms (slower reactions)
-	BotPotionCooldownMs  = 1000 // Potion cooldown (can throw more frequently)
-	BotPotionRange       = 130.0
-	BotDetectionRange    = 400.0 // Range to detect and chase targets
-	BotRoamInterval      = 2000  // Pick new roam target every 2 seconds
-	BotAloeSearchRange   = 400.0 // Range to search for aloe when roaming
-	BotMinSeparation     = 250.0 // Minimum distance bots try to keep from each other when roaming
-	BotClusterThreshold  = 200.0 // If this close to 2+ bots, consider dispersing
-	BotSkirmishChance    = 0.20  // 20% chance to target other bot when no humans nearby
-	BotLongRangeSkirmish = 0.15  // 15% chance to seek out distant bot across the map
-	BotStuckThreshold    = 10    // Ticks without movement before considered stuck
-	BotStuckMoveMin      = 3.0   // Minimum movement per tick to not be considered stuck
-	RedisKeyBotGame      = "bot:game"
-	RedisKeyBotNames     = "bot:usernames"
-	RedisKeyBotNamePool  = "bot:names"
+	BotCount               = 9
+	BotPathUpdateMs        = 500  // Recompute path every 500ms (slower reactions)
+	BotPotionCooldownMs    = 750 // Potion cooldown (can throw more frequently)
+	BotPotionRange         = 150.0
+	BotDetectionRange      = 400.0 // Range to detect and chase targets
+	BotRoamInterval        = 2000  // Pick new roam target every 2 seconds
+	BotAloeSearchRange     = 500.0 // Range to search for aloe when roaming
+	BotMinSeparation       = 300.0 // Minimum distance bots try to keep from each other when roaming
+	BotClusterThreshold    = 200.0 // If this close to 2+ bots, consider dispersing
+	BotSkirmishChance      = 0.15  // 8% chance to target other bot when no humans nearby (reduced from 20%)
+	BotLongRangeSkirmish   = 0.10  // 5% chance to seek out distant bot across the map (reduced from 15%)
+	BotStuckThreshold      = 10    // Ticks without movement before considered stuck
+	BotStuckMoveMin        = 3.0   // Minimum movement per tick to not be considered stuck
+	BotDisengageCooldownMs = 4000  // After freezing a target, disengage for this long before targeting again
+	BotDisengageDistance   = 500.0 // Minimum distance to move away after freezing a target
+	RedisKeyBotGame        = "bot:game"
+	RedisKeyBotNames       = "bot:usernames"
+	RedisKeyBotNamePool    = "bot:names"
 )
 
 // BotState holds bot-specific state beyond PlayerState
 type BotState struct {
-	ID              string
-	Name            string
-	Path            []PathNode
-	PathIndex       int
-	LastPathUpdate  time.Time
-	LastPotionThrow time.Time
-	TargetID        string
-	RoamTargetX     float32
-	RoamTargetY     float32
-	LastRoamUpdate  time.Time
-	IsRoaming       bool
-	SeekingAloe     bool   // true if currently pathing to aloe
-	AloeTargetID    string // ID of aloe being targeted
-	LastX           float32
-	LastY           float32
-	StuckTicks      int // count of consecutive ticks with no movement
+	ID                 string
+	Name               string
+	Path               []PathNode
+	PathIndex          int
+	LastPathUpdate     time.Time
+	LastPotionThrow    time.Time
+	TargetID           string
+	RoamTargetX        float32
+	RoamTargetY        float32
+	LastRoamUpdate     time.Time
+	IsRoaming          bool
+	SeekingAloe        bool   // true if currently pathing to aloe
+	AloeTargetID       string // ID of aloe being targeted
+	LastX              float32
+	LastY              float32
+	StuckTicks         int // count of consecutive ticks with no movement
+	IsDisengaging      bool
+	DisengageUntil     time.Time
+	LastFrozenTargetID string  // ID of the last target this bot froze (avoid re-targeting)
+	DisengageTargetX   float32 // Position to move away to during disengage
+	DisengageTargetY   float32
 }
 
 // BotManager manages bot lifecycle and AI
@@ -208,18 +215,48 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 			bot.LastRoamUpdate = now
 		}
 
-		// If current target is frozen, clear it and immediately pick a new roam destination
+		// If current target is frozen, enter disengage mode
 		if bot.TargetID != "" {
 			if targetPlayer, exists := players[bot.TargetID]; exists && targetPlayer.IsFrozen {
+				frozenTargetID := bot.TargetID
+				bot.LastFrozenTargetID = frozenTargetID
 				bot.TargetID = ""
-				bot.IsRoaming = true
+				bot.IsRoaming = false
 				bot.SeekingAloe = false
-				// Immediately pick a new destination away from frozen target
+				bot.IsDisengaging = true
+				bot.DisengageUntil = now.Add(BotDisengageCooldownMs * time.Millisecond)
+
+				// Pick a disengage target that's far from the frozen target and other bots
+				bm.pickDisengageTarget(bot, botID, players, targetPlayer.X, targetPlayer.Y)
+				bot.Path = bm.computePath(player.X, player.Y, bot.DisengageTargetX, bot.DisengageTargetY)
+				bot.PathIndex = 0
+				bot.LastPathUpdate = now
+			}
+		}
+
+		// Handle disengage mode - bot is actively moving away after freezing someone
+		if bot.IsDisengaging {
+			// Check if disengage period is over
+			if now.After(bot.DisengageUntil) {
+				bot.IsDisengaging = false
+				bot.IsRoaming = true
+				bot.LastFrozenTargetID = "" // Clear after cooldown so bot can target them again later
 				bm.pickSmartRoamTarget(bot, botID, players)
 				bot.Path = bm.computePath(player.X, player.Y, bot.RoamTargetX, bot.RoamTargetY)
 				bot.PathIndex = 0
 				bot.LastPathUpdate = now
 				bot.LastRoamUpdate = now
+			} else {
+				// Still disengaging
+				if !bm.followPath(bot, player) {
+					// Reached disengage target or path exhausted, pick new disengage target
+					bm.pickDisengageTarget(bot, botID, players, 0, 0)
+					bot.Path = bm.computePath(player.X, player.Y, bot.DisengageTargetX, bot.DisengageTargetY)
+					bot.PathIndex = 0
+					bot.LastPathUpdate = now
+					bm.followPath(bot, player)
+				}
+				continue // Skip normal targeting while disengaging
 			}
 		}
 
@@ -234,7 +271,7 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 		}
 
 		// Find target within detection range, considering already claimed targets
-		targetID, targetX, targetY, targetDist := bm.findBestTarget(botID, players, claimedTargets)
+		targetID, targetX, targetY, targetDist := bm.findBestTarget(botID, players, claimedTargets, bot.LastFrozenTargetID)
 
 		if targetID != "" {
 			// Target found, chase mode
@@ -274,10 +311,11 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 			bot.IsRoaming = true
 
 			// Occasionally decide to target another bot for a skirmish (makes map feel lively)
+			// But skip if we're still in cooldown from recently freezing someone
 			skirmishRoll := rand.Float32()
-			if skirmishRoll < BotSkirmishChance {
+			if skirmishRoll < BotSkirmishChance && bot.LastFrozenTargetID == "" {
 				// Try nearby skirmish first
-				skirmishTarget, sx, sy, sDist := bm.findNearestBot(botID, players)
+				skirmishTarget, sx, sy, sDist := bm.findNearestBot(botID, players, bot.LastFrozenTargetID)
 				if skirmishTarget != "" && sDist <= BotDetectionRange*1.5 {
 					bot.TargetID = skirmishTarget
 					bot.IsRoaming = false
@@ -288,9 +326,9 @@ func (bm *BotManager) Update(now time.Time, players map[string]*PlayerState) []B
 					bm.followPath(bot, player)
 					continue
 				}
-			} else if skirmishRoll < BotSkirmishChance+BotLongRangeSkirmish {
+			} else if skirmishRoll < BotSkirmishChance+BotLongRangeSkirmish && bot.LastFrozenTargetID == "" {
 				// Long-range skirmish: find any bot on the map (even far away)
-				skirmishTarget, sx, sy, _ := bm.findFarthestBot(botID, players)
+				skirmishTarget, sx, sy, _ := bm.findFarthestBot(botID, players, bot.LastFrozenTargetID)
 				if skirmishTarget != "" {
 					bot.TargetID = skirmishTarget
 					bot.IsRoaming = false
@@ -419,6 +457,82 @@ func (bm *BotManager) pickSmartRoamTarget(bot *BotState, botID string, players m
 	}
 }
 
+// pickDisengageTarget selects a location far from the frozen target and other bots
+// Used when a bot needs to retreat after freezing an opponent
+func (bm *BotManager) pickDisengageTarget(bot *BotState, botID string, players map[string]*PlayerState, avoidX, avoidY float32) {
+	botPlayer, exists := players[botID]
+	if !exists {
+		bm.pickSmartRoamTarget(bot, botID, players)
+		bot.DisengageTargetX = bot.RoamTargetX
+		bot.DisengageTargetY = bot.RoamTargetY
+		return
+	}
+
+	bestX, bestY := float32(0), float32(0)
+	bestScore := float32(-math.MaxFloat32)
+
+	for range 15 {
+		tileX, tileY, ok := bm.gameMap.RandomPassableTile()
+		if !ok {
+			continue
+		}
+
+		candidateX := float32(tileX*bm.gameMap.TileSize) + float32(bm.gameMap.TileSize)/2
+		candidateY := float32(tileY*bm.gameMap.TileSize) + float32(bm.gameMap.TileSize)/2
+
+		// Score based on:
+		// 1. Distance from avoid point (frozen target); higher is better
+		// 2. Distance from other bots; higher is better
+		// 3. Distance from current position,  prefer not too far (so we don't cross entire map)
+
+		distFromAvoid := float32(0)
+		if avoidX != 0 || avoidY != 0 {
+			distFromAvoid = distance(candidateX, candidateY, avoidX, avoidY)
+		}
+
+		// Find minimum distance to any other bot
+		minDistToBot := float32(math.MaxFloat32)
+		for otherID := range bm.bots {
+			if otherID == botID {
+				continue
+			}
+			if otherPlayer, exists := players[otherID]; exists {
+				dist := distance(candidateX, candidateY, otherPlayer.X, otherPlayer.Y)
+				if dist < minDistToBot {
+					minDistToBot = dist
+				}
+			}
+		}
+
+		distFromSelf := distance(candidateX, candidateY, botPlayer.X, botPlayer.Y)
+
+		// Score: prioritize distance from avoid point and other bots, but penalize very far locations
+		score := distFromAvoid + minDistToBot*0.5 - distFromSelf*0.1
+
+		// Must be at least BotDisengageDistance from the frozen target
+		if avoidX != 0 || avoidY != 0 {
+			if distFromAvoid < BotDisengageDistance {
+				score -= 1000 // Heavy penalty for being too close to frozen target
+			}
+		}
+
+		if score > bestScore {
+			bestScore = score
+			bestX = candidateX
+			bestY = candidateY
+		}
+	}
+
+	if bestX != 0 || bestY != 0 {
+		bot.DisengageTargetX = bestX
+		bot.DisengageTargetY = bestY
+	} else {
+		bm.pickSmartRoamTarget(bot, botID, players)
+		bot.DisengageTargetX = bot.RoamTargetX
+		bot.DisengageTargetY = bot.RoamTargetY
+	}
+}
+
 // findNearestAloe finds the nearest aloe item within search range
 func (bm *BotManager) findNearestAloe(botX, botY float32) (float32, float32, string, bool) {
 	items := bm.gsm.itemManager.GetActiveItems()
@@ -447,7 +561,7 @@ func (bm *BotManager) findNearestAloe(botX, botY float32) (float32, float32, str
 }
 
 // findNearestBot finds the nearest other bot for potential skirmishes
-func (bm *BotManager) findNearestBot(botID string, players map[string]*PlayerState) (string, float32, float32, float32) {
+func (bm *BotManager) findNearestBot(botID string, players map[string]*PlayerState, skipTargetID string) (string, float32, float32, float32) {
 	botPlayer, exists := players[botID]
 	if !exists {
 		return "", 0, 0, 0
@@ -458,6 +572,10 @@ func (bm *BotManager) findNearestBot(botID string, players map[string]*PlayerSta
 
 	for otherID := range bm.bots {
 		if otherID == botID {
+			continue
+		}
+		// Skip recently frozen target
+		if otherID == skipTargetID {
 			continue
 		}
 		if otherPlayer, exists := players[otherID]; exists {
@@ -481,7 +599,7 @@ func (bm *BotManager) findNearestBot(botID string, players map[string]*PlayerSta
 }
 
 // findFarthestBot finds the farthest bot (for long-range skirmishes to spread action across map)
-func (bm *BotManager) findFarthestBot(botID string, players map[string]*PlayerState) (string, float32, float32, float32) {
+func (bm *BotManager) findFarthestBot(botID string, players map[string]*PlayerState, skipTargetID string) (string, float32, float32, float32) {
 	botPlayer, exists := players[botID]
 	if !exists {
 		return "", 0, 0, 0
@@ -492,6 +610,10 @@ func (bm *BotManager) findFarthestBot(botID string, players map[string]*PlayerSt
 
 	for otherID := range bm.bots {
 		if otherID == botID {
+			continue
+		}
+		// Skip recently frozen target
+		if otherID == skipTargetID {
 			continue
 		}
 		if otherPlayer, exists := players[otherID]; exists {
@@ -541,7 +663,7 @@ func (bm *BotManager) isInCluster(botID string, players map[string]*PlayerState)
 // findBestTarget finds the best target for a bot, avoiding targets already claimed by other bots
 // Priority: unclaimed humans > unclaimed bots > claimed humans > claimed bots
 // Returns targetID, targetX, targetY, distance (empty string if no target in range)
-func (bm *BotManager) findBestTarget(botID string, players map[string]*PlayerState, claimedTargets map[string]string) (string, float32, float32, float32) {
+func (bm *BotManager) findBestTarget(botID string, players map[string]*PlayerState, claimedTargets map[string]string, skipTargetID string) (string, float32, float32, float32) {
 	botPlayer, exists := players[botID]
 	if !exists {
 		return "", 0, 0, 0
@@ -558,6 +680,11 @@ func (bm *BotManager) findBestTarget(botID string, players map[string]*PlayerSta
 
 	for id, p := range players {
 		if id == botID {
+			continue
+		}
+
+		// Skip the recently frozen target (during disengage cooldown)
+		if id == skipTargetID {
 			continue
 		}
 
