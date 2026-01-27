@@ -54,11 +54,29 @@ func New(cfg *config.Config) (*Hub, error) {
 	}
 
 	ctx := context.Background()
+	actualPlayersCount := 0
+	actualPlayersOK := false
+	if !cfg.IsAPIServer {
+		count, err := actualPlayerCount(ctx, hub.redis)
+		if err != nil {
+			logger.Error("Failed to count actual players for bot cleanup: %v", err)
+		} else {
+			actualPlayersCount = count
+			actualPlayersOK = true
+		}
+	}
+
 	hub.redis.Del(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers, "lobby:usernames")
 
 	if !cfg.IsAPIServer {
 		// Clean up bot keys only on game server startup
-		hub.redis.Del(ctx, RedisKeyBotGame, RedisKeyBotNames)
+		if actualPlayersOK && actualPlayersCount > BotRemovalPlayerThreshold {
+			if err := hub.redis.Del(ctx, RedisKeyBotGame, RedisKeyBotNames).Err(); err != nil {
+				logger.Error("Failed to remove bots from Redis: %v", err)
+			}
+		} else if actualPlayersOK {
+			logger.Info("Skipping bot cleanup; actual players=%d (threshold=%d)", actualPlayersCount, BotRemovalPlayerThreshold)
+		}
 		gameMap, err := LoadMapFromFile(cfg.MapPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load game map: %w", err)

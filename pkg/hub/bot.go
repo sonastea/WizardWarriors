@@ -14,24 +14,25 @@ import (
 )
 
 const (
-	BotCount               = 9
-	BotPathUpdateMs        = 500  // Recompute path every 500ms (slower reactions)
-	BotPotionCooldownMs    = 750 // Potion cooldown (can throw more frequently)
-	BotPotionRange         = 150.0
-	BotDetectionRange      = 400.0 // Range to detect and chase targets
-	BotRoamInterval        = 2000  // Pick new roam target every 2 seconds
-	BotAloeSearchRange     = 500.0 // Range to search for aloe when roaming
-	BotMinSeparation       = 300.0 // Minimum distance bots try to keep from each other when roaming
-	BotClusterThreshold    = 200.0 // If this close to 2+ bots, consider dispersing
-	BotSkirmishChance      = 0.15  // 8% chance to target other bot when no humans nearby (reduced from 20%)
-	BotLongRangeSkirmish   = 0.10  // 5% chance to seek out distant bot across the map (reduced from 15%)
-	BotStuckThreshold      = 10    // Ticks without movement before considered stuck
-	BotStuckMoveMin        = 3.0   // Minimum movement per tick to not be considered stuck
-	BotDisengageCooldownMs = 4000  // After freezing a target, disengage for this long before targeting again
-	BotDisengageDistance   = 500.0 // Minimum distance to move away after freezing a target
-	RedisKeyBotGame        = "bot:game"
-	RedisKeyBotNames       = "bot:usernames"
-	RedisKeyBotNamePool    = "bot:names"
+	BotCount                  = 9
+	BotRemovalPlayerThreshold = 10
+	BotPathUpdateMs           = 500 // Recompute path every 500ms (slower reactions)
+	BotPotionCooldownMs       = 750 // Potion cooldown (can throw more frequently)
+	BotPotionRange            = 150.0
+	BotDetectionRange         = 400.0 // Range to detect and chase targets
+	BotRoamInterval           = 2000  // Pick new roam target every 2 seconds
+	BotAloeSearchRange        = 500.0 // Range to search for aloe when roaming
+	BotMinSeparation          = 300.0 // Minimum distance bots try to keep from each other when roaming
+	BotClusterThreshold       = 200.0 // If this close to 2+ bots, consider dispersing
+	BotSkirmishChance         = 0.15  // 8% chance to target other bot when no humans nearby (reduced from 20%)
+	BotLongRangeSkirmish      = 0.10  // 5% chance to seek out distant bot across the map (reduced from 15%)
+	BotStuckThreshold         = 10    // Ticks without movement before considered stuck
+	BotStuckMoveMin           = 3.0   // Minimum movement per tick to not be considered stuck
+	BotDisengageCooldownMs    = 4000  // After freezing a target, disengage for this long before targeting again
+	BotDisengageDistance      = 500.0 // Minimum distance to move away after freezing a target
+	RedisKeyBotGame           = "bot:game"
+	RedisKeyBotNames          = "bot:usernames"
+	RedisKeyBotNamePool       = "bot:names"
 )
 
 // BotState holds bot-specific state beyond PlayerState
@@ -1044,10 +1045,28 @@ func clampInt(value, min, max int) int {
 	return value
 }
 
+func actualPlayerCount(ctx context.Context, redisClient *redis.Client) (int, error) {
+	ids, err := redisClient.SUnion(ctx, RedisKeyLobbyUsers, RedisKeyGameUsers).Result()
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 // Cleanup removes bots from Redis (call on server shutdown)
 func (bm *BotManager) Cleanup(ctx context.Context) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
+
+	actualCount, err := actualPlayerCount(ctx, bm.redis)
+	if err != nil {
+		logger.Error("[BotManager] Failed to count actual players for cleanup: %v", err)
+		return
+	}
+	if actualCount <= BotRemovalPlayerThreshold {
+		logger.Info("[BotManager] Skipping bot cleanup; actual players=%d (threshold=%d)", actualCount, BotRemovalPlayerThreshold)
+		return
+	}
 
 	for id := range bm.bots {
 		bm.redis.SRem(ctx, RedisKeyBotGame, id)
